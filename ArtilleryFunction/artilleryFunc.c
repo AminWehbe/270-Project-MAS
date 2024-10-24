@@ -16,5 +16,6 @@ bool artillery(char player2Board[SIZE][SIZE], int x, int y){
             }
         }
         return check;
-    
-}
+} //maybe change the method from bool to void, as i dont see a need for it to be bool.
+// we can discuss your logic if you think otherwise when you are available
+// please do include some description for the logic 
