@@ -10,20 +10,14 @@ bool torpedo(char player2Board[SIZE][SIZE], char index) {
         int row = index - '1';
         if (row >= 0 && row < SIZE) {
             for (int j = 0; j < SIZE; j++) {
-                if (player2Board[row][j] == 'S') {
-                    player2Board[row][j] = 'X'; 
-                    hit = true;
-                }
+                    attack(player2Board[SIZE][SIZE],player2Board[SIZE][SIZE],row,j, isHard); 
             }
         }
     } else if (isalpha(index)) {
         int col = toupper(index) - 'A';
         if (col >= 0 && col < SIZE) {
             for (int i = 0; i < SIZE; i++) {
-                if (player2Board[i][col] == 'S') {
-                    player2Board[i][col] = 'X'; 
-                    hit = true;
-                }
+                attack(player2Board[SIZE][SIZE],player2Board[SIZE][SIZE],i,col, isHard);
             }
         }
     }
