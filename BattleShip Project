@@ -1,0 +1,159 @@
+#include <stdio.h>
+#include <stdlib.h>
+#define SIZE 10
+#define PLAYER_COUNT 2
+#define SHIP_COUNT 4
+
+typedef struct
+{
+    char board[SIZE][SIZE];   // Player's own board
+} PlayerStatus;
+
+int shipSizes[4] = {5, 4, 3, 2};
+bool isHard;
+
+void clearScreen();
+void getPlayerNames(char names[PLAYER_COUNT][20]);
+void getDifficulity(char difficulity[]);
+void initializeBoard(char board[SIZE][SIZE]);
+int randomFirstPlayer();
+void waitFor(unsigned int secs);
+void printBoard(char board[SIZE][SIZE], bool isHardMode);
+
+int main()
+{
+    // Global initialization
+    clearScreen();
+    srand(time(NULL));
+    PlayerStatus playerStatus[PLAYER_COUNT];
+    char playerNames[PLAYER_COUNT][20];
+    int randomNumber;
+    char hardMode[2];
+    getPlayerNames(playerNames);
+    getDifficulity(hardMode);
+    // PlayerStatus initialization phase
+    for (int i = 0; i < PLAYER_COUNT; i++)
+    {
+        initializeBoard(playerStatus[i].board);
+    }
+    // Randomly getting player to start
+    puts("Let's see who goes first.");
+    randomNumber = randomFirstPlayer();
+    waitFor(2);
+    printf("%s goes first!\n", playerNames[randomNumber]);
+    bool gameOver = false;  // Bool that flips true when all ships are sunk on 1 player's board
+    int player1 = randomNumber;
+    int player2 = (player1 + 1) % PLAYER_COUNT;
+    waitFor(1);
+    puts("LAUNCHING GAME...");
+    waitFor(3);
+
+    // Title Screen
+    clearScreen();
+    puts("LET'S PLAY OCEAN WARFARE!\nMAY THE BEST SHIP CAPTAIN WIN!\n");
+    waitFor(1);
+    puts("GAME STARTING...");
+    waitFor(3);
+    clearScreen();
+    waitFor(8);
+
+    // Game loop
+    while(!gameOver)
+    {
+
+    }
+    return 0;
+
+}
+
+// Functions implementation
+void getPlayerNames(char names[PLAYER_COUNT][20])
+{
+    for (int i = 0; i < PLAYER_COUNT; i++)
+    {
+        printf("Enter name for player %d: ", i + 1);
+        scanf("%s", names[i]);
+    }
+}
+// Method to get difficulity. Hard doesn't show misses.
+void getDifficulity(char difficulity[])
+{
+    int c;
+    printf("Please enter a tracking difficulty level: E --D Easy, H --D Hard.\n");
+    scanf("%s", difficulity);
+    while (strlen(difficulity) > 1 || difficulity[0] != 'E' && difficulity[0] != 'H' && difficulity[0] != 'e' && difficulity[0] != 'h')
+    {
+        printf("The input you entered is invalid. Please enter: E --D Easy, H --D Hard.\n");
+        scanf("%s", difficulity);
+    }
+    switch (difficulity[0])
+    {
+    case 'E' | 'e':
+        puts("You chose Easy Mode. Let's Play!");
+        isHard = false;
+        break;
+    case 'H' | 'h':
+        puts("You chose Hard Mode. Let's Play!");
+        isHard = true;
+        break;
+    default:
+        break;
+    }
+}
+// Initializes board with water (~)
+void initializeBoard(char board[SIZE][SIZE])
+{
+    for (int i = 0; i < SIZE; i++)
+    {
+
+        for (int j = 0; j < SIZE; j++)
+        {
+            board[i][j] = '~';
+        }
+    }
+}
+// Prints the board
+void printBoard(char board[SIZE][SIZE], bool isHardMode)
+{
+    printf("   A B C D E F G H I J\n"); // Column headers
+    for (int i = 0; i < SIZE; i++)
+    {
+        printf("%2d", i + 1); // Row numbers without space for alignment
+        for (int j = 0; j < SIZE; j++)
+        {
+            char cell = board[i][j];
+            if (cell == 'S')
+                printf(" S"); // Show ship placement
+            else if (cell == 'X')
+                printf(" *"); // Shows Hit
+            else if (cell == 'o' && !isHardMode)
+                printf(" o"); // Shows Miss
+            else if (cell == 'o' && isHardMode)
+                printf(" ~"); // Hidden in Hard mode
+            else
+                printf(" ~"); // Water
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+// Method to randomly get and integer with the rand function and then get the remainder from the % operation(here %2 hence getting either 0 or 1 from any possible int)
+int randomFirstPlayer()
+{
+    return rand() % PLAYER_COUNT;
+}
+// Method to add suspense (ex: when gettin first player randomly). No practical use as much as something i wanted to do and got from "stackoverflow"
+void waitFor(unsigned int secs)
+{
+    unsigned int retTime = time(0) + secs; // Get finishing time.
+    while (time(0) < retTime); // Loop until it arrives.
+}
+// To clear console screen depending on OS, also got from web
+void clearScreen()
+{
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
+}
