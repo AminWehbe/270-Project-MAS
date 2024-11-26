@@ -4,25 +4,37 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+
 #define SIZE 10
 #define PLAYER_COUNT 2
 #define SHIP_COUNT 4
 
 typedef struct
 {
-    char board[SIZE][SIZE];   // Player's own board
+    // Boards
+    char board[SIZE][SIZE];        // Player's own board
+    int shipBoard[SIZE][SIZE];     // Copy of player's board, instead of (~) we have 0s, and instead of ships we have their size.
+    char displayBoard[SIZE][SIZE]; // View of opponent's board, depending on difficulty setting.
+
+    bool shipsAvailable[SHIP_COUNT]; // Helps with placing ships
+
 } PlayerStatus;
 
 int shipSizes[4] = {5, 4, 3, 2};
 bool isHard;
 
-void clearScreen();
 void getPlayerNames(char names[PLAYER_COUNT][20]);
 void getDifficulity(char difficulity[]);
 void initializeBoard(char board[SIZE][SIZE]);
+void initializeShipBoard(int shipBoard[SIZE][SIZE]);
+void printBoard(char board[SIZE][SIZE], bool isHardMode);
+void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex);
+void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size);
+
+// Helper/Secondary Methods
+void clearScreen();
 int randomFirstPlayer();
 void waitFor(unsigned int secs);
-void printBoard(char board[SIZE][SIZE], bool isHardMode);
 bool validateCoordinates(int x, int y);
 bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal);
 
@@ -41,18 +53,44 @@ int main()
     for (int i = 0; i < PLAYER_COUNT; i++)
     {
         initializeBoard(playerStatus[i].board);
+        initializeBoard(playerStatus[i].displayBoard);
+        initializeShipBoard(playerStatus[i].shipBoard);
+        for (int j = 0; j < SHIP_COUNT; j++)
+        {
+            playerStatus[i].shipsAvailable[j] = true;
+        }
     }
     // Randomly getting player to start
     puts("Let's see who goes first.");
     randomNumber = randomFirstPlayer();
     waitFor(2);
     printf("%s goes first!\n", playerNames[randomNumber]);
-    bool gameOver = false;  // Bool that flips true when all ships are sunk on 1 player's board
+    bool gameOver = false; // Bool that flips true when all ships are sunk on 1 player's board
     int player1 = randomNumber;
     int player2 = (player1 + 1) % PLAYER_COUNT;
     waitFor(1);
     puts("LAUNCHING GAME...");
     waitFor(3);
+
+    // Ship placing phase
+    for (int i = 0; i < PLAYER_COUNT; i++)
+    {
+        clearScreen();
+        printf("%s, PLACE YOUR SHIPS:\n\n", playerNames[i]);
+        printBoard(playerStatus[i].board, isHard);
+        while (playerStatus[i].shipsAvailable[0] || playerStatus[i].shipsAvailable[1] || playerStatus[i].shipsAvailable[2] || playerStatus[i].shipsAvailable[3])
+        {
+            displayAvailableShips(playerStatus, i);
+        }
+        waitFor(1);
+        puts("NICE PLACEMENTS.\n");
+        if (i == 0)
+        {
+            waitFor(1);
+            puts("SWITCHING TURNS.");
+        }
+        waitFor(3);
+    }
 
     // Title Screen
     clearScreen();
@@ -64,12 +102,23 @@ int main()
     waitFor(8);
 
     // Game loop
-    while(!gameOver)
+    while (!gameOver)
     {
+        clearScreen();
+        printf("%s's turn!\n\n", playerNames[player1]);
+        printf("This is your board %s.\n\n", playerNames[player1]);
+        printBoard(playerStatus[player1].board, isHard);
 
+        printf("This is your opponent's board (Your view):\n");
+        printBoard(playerStatus[player1].displayboard, isHard);
+
+        // Switch players
+        player1 = player2;
+        player2 = (player1 + 1) % PLAYER_COUNT;
+        printf("\nSWITCHING TURNS.\n");
+        waitFor(3);
     }
     return 0;
-
 }
 
 // Functions implementation
@@ -118,6 +167,15 @@ void initializeBoard(char board[SIZE][SIZE])
         }
     }
 }
+// Initializes shipboard with 0s.
+void initializeShipBoard(int shipBoard[SIZE][SIZE])
+{
+    for (int i = 0; i < SIZE; i++)
+    {
+        for (int j = 0; j < SIZE; j++)
+            shipBoard[i][j] = 0;
+    }
+}
 // Prints the board
 void printBoard(char board[SIZE][SIZE], bool isHardMode)
 {
@@ -143,6 +201,156 @@ void printBoard(char board[SIZE][SIZE], bool isHardMode)
     }
     printf("\n");
 }
+// Method that displays to user whish ships can be placed with their sizes.
+void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
+{
+    printf("Available ships to place:\n");
+    for (int i = 0; i < SHIP_COUNT; i++)
+    {
+        if (playerStatus[playerIndex].shipsAvailable[i])
+            printf("%d. Ship of size %d\n", i + 1, shipSizes[i]);
+    }
+
+    int choice;
+    while (true)
+    { // Infinite loop until a valid input is received
+        printf("Select a ship to place (enter the number): ");
+
+        // Read input and check if it's valid integer
+        if (scanf("%d", &choice) != 1)
+        {
+            printf("Invalid input. Please enter a number.\n");
+            while (getchar() != '\n')
+                ; // to clear input buffer (gpt)
+            continue;
+        }
+        if (choice < 1 || choice > SHIP_COUNT)
+        {
+            printf("Invalid choice. Please select a valid ship number.\n");
+            continue;
+        }
+        switch (choice)
+        {
+        case 1:
+            if (playerStatus[playerIndex].shipsAvailable[0])
+            {
+                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[0]);
+                playerStatus[playerIndex].shipsAvailable[0] = false;
+            }
+            else
+            {
+                printf("Ship of size %d is not available.\n", shipSizes[0]);
+            }
+            break;
+        case 2:
+            if (playerStatus[playerIndex].shipsAvailable[1])
+            {
+                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[1]);
+                playerStatus[playerIndex].shipsAvailable[1] = false;
+            }
+            else
+            {
+                printf("Ship of size %d is not available.\n", shipSizes[1]);
+            }
+            break;
+        case 3:
+            if (playerStatus[playerIndex].shipsAvailable[2])
+            {
+                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[2]);
+                playerStatus[playerIndex].shipsAvailable[2] = false;
+            }
+            else
+            {
+                printf("Ship of size %d is not available.\n", shipSizes[2]);
+            }
+            break;
+        case 4:
+            if (playerStatus[playerIndex].shipsAvailable[3])
+            {
+                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[3]);
+                playerStatus[playerIndex].shipsAvailable[3] = false;
+            }
+            else
+            {
+                printf("Ship of size %d is not available.\n", shipSizes[3]);
+            }
+            break;
+        }
+        break;
+    }
+}
+// Method to place the ships after checking the coordinates and the size of the ship
+void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size)
+{
+    bool placed = false;
+    while (!placed)
+    {
+        int x, y;
+        char direction;
+        printf("Enter the coordinates for your ship of size %d (e.g., A1 H): ", size);
+        char coord[3];
+        scanf(" %s %c", coord, &direction);
+
+        if (strlen(coord) < 2 && strlen(coord) > 3 && coord[1] == '1' && coord[2] != '0')
+        {
+            printf("Invalid coordinates. Please use the format A1 or B10.\n");
+            continue;
+        }
+        y = toupper(coord[0]) - 'A';
+        x = atoi(&coord[1]) - 1;
+        if (validateCoordinates(x, y))
+        {
+            bool horizontal = (direction == 'H' || direction == 'h');
+            bool vertical = (direction == 'V' || direction == 'v');
+            if (horizontal)
+            {
+                if (y + size <= SIZE && checkPlacement(board, x, y, size, true))
+                {
+                    for (int j = 0; j < size; j++)
+                    {
+                        board[x][y + j] = 'S'; // Place ship
+                        shipBoard[x][y + j] = size;
+                    }
+                    placed = true;
+                    puts("\nSHIP PLACED!");
+                    printBoard(board, false);
+                }
+                else
+                {
+                    printf("Invalid placement. Try again.\n");
+                    continue;
+                }
+            }
+            else if (vertical)
+            {
+                if (x + size <= SIZE && checkPlacement(board, x, y, size, false))
+                {
+                    for (int j = 0; j < size; j++)
+                    {
+                        board[x + j][y] = 'S'; // Place ship
+                        shipBoard[x + j][y] = size;
+                    }
+                    puts("SHIP PLACED!");
+                    printBoard(board, false);
+                    placed = true;
+                }
+                else
+                {
+                    printf("Invalid placement. Try again.\n");
+                    continue;
+                }
+            }
+            else
+            {
+                puts("Invalid input. Try again.\n");
+            }
+        }
+        else
+        {
+            puts("Invalid coordinates. Try again.\n");
+        }
+    }
+}
 // Method to randomly get and integer with the rand function and then get the remainder from the % operation(here %2 hence getting either 0 or 1 from any possible int)
 int randomFirstPlayer()
 {
@@ -152,7 +360,8 @@ int randomFirstPlayer()
 void waitFor(unsigned int secs)
 {
     unsigned int retTime = time(0) + secs; // Get finishing time.
-    while (time(0) < retTime); // Loop until it arrives.
+    while (time(0) < retTime)
+        ; // Loop until it arrives.
 }
 // To clear console screen depending on OS, also got from web
 void clearScreen()
