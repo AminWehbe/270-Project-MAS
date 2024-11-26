@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <ctype.h>
+#include <time.h>
 #define SIZE 10
 #define PLAYER_COUNT 2
 #define SHIP_COUNT 4
@@ -19,6 +23,8 @@ void initializeBoard(char board[SIZE][SIZE]);
 int randomFirstPlayer();
 void waitFor(unsigned int secs);
 void printBoard(char board[SIZE][SIZE], bool isHardMode);
+bool validateCoordinates(int x, int y);
+bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal);
 
 int main()
 {
@@ -156,4 +162,27 @@ void clearScreen()
 #else
     system("clear");
 #endif
+}
+// Method to check the placement in case of overlap. Returns true if overlap found, hence not allowing for ship placement
+bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal)
+{
+    for (int j = 0; j < size; j++)
+    {
+        if (horizontal)
+        {
+            if (board[x][y + j] != '~')
+                return false; // Detected overlap
+        }
+        else
+        {
+            if (board[x + j][y] != '~')
+                return false; // Detected overlap
+        }
+    }
+    return true; // Can place ship
+}
+// Method that checks for out-of-bounds in coordinates of form (x, y)
+bool validateCoordinates(int x, int y)
+{
+    return x >= 0 && x < SIZE && y >= 0 && y < SIZE;
 }
