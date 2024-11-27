@@ -44,8 +44,9 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex);
 void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size);
 void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp);
 bool attack(char player1Board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode);
+void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode);
 void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input);
-void displayMoveCatalogue();
+bool checkWin(char opponentBoard[SIZE][SIZE]);
 
 // Helper/Secondary Methods
 void clearScreen();
@@ -53,6 +54,7 @@ int randomFirstPlayer();
 void waitFor(unsigned int secs);
 bool validateCoordinates(int x, int y);
 bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal);
+void displayMoveCatalogue();
 
 int main()
 {
@@ -454,7 +456,7 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
             else
                 puts("You don't possess any Smoke Screens.\nYou lose your turn!");
             break;
-        case 4: // dont forget to add condition for case 4 5.
+        case 4: 
             if (playerStatus[playerIndex].canUseArtillery)
             {
                 puts("Enter coordinates for the Artillery Attack:\n");
@@ -462,7 +464,7 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
                 y = toupper(coord[0]) - 'A';
                 x = atoi(&coord[1]) - 1;
                 if (validateCoordinates(x, y))
-                    // Artillery method here
+                    artillery(playerStatus[opponent].board, playerStatus[playerIndex].displayBoard, x, y, isHard);
                 else 
                     puts("Invalid coordinates.\nYou lose your turn.");
             }
@@ -523,6 +525,18 @@ bool attack(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x
         printf("%c", opponentBoard[x][y]);
     return false;
 }
+// Method to hit 2x2 area
+void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode)
+{
+    for (int i = x; i <= x + 1; i++)
+    {
+        for (int j = y; j <= y + 1; j++)
+        {
+            if (i < SIZE && j < SIZE)
+                attack(opponentBoard, displayBoard, i, j, isHardMode);
+        }
+    }
+}
 // Method to hit single row/column
 void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input)
 {
@@ -571,6 +585,19 @@ void clearScreen()
 #else
     system("clear");
 #endif
+}
+// Method that checks if there is still a S, i.e. ship not sunk, to return false, otherwise true
+bool checkWin(char opponentBoard[SIZE][SIZE])
+{
+    for (int i = 0; i < SIZE; i++)
+    {
+        for (int j = 0; j < SIZE; j++)
+        {
+            if (opponentBoard[i][j] == 'S')
+                return false;
+        }
+    }
+    return true;
 }
 // Method to check the placement in case of overlap. Returns true if overlap found, hence not allowing for ship placement
 bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal)
