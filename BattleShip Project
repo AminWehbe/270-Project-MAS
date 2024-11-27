@@ -27,7 +27,12 @@ typedef struct
 
 } PlayerStatus;
 
-int shipSizes[4] = {5, 4, 3, 2};
+enum ShipSize {
+    CARRIER = 5,
+    BATTLESHIP = 4,
+    DESTROYER = 3,
+    SUBMARINE = 2
+};
 bool isHard;
 
 void getPlayerNames(char names[PLAYER_COUNT][20]);
@@ -36,7 +41,7 @@ void initializeBoard(char board[SIZE][SIZE]);
 void initializeShipBoard(int shipBoard[SIZE][SIZE]);
 void printBoard(char board[SIZE][SIZE], bool isHardMode);
 void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex);
-void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size);
+void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size);
 void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp);
 bool attack(char player1Board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode);
 void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input);
@@ -225,11 +230,14 @@ void printBoard(char board[SIZE][SIZE], bool isHardMode)
 void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
 {
     printf("Available ships to place:\n");
-    for (int i = 0; i < SHIP_COUNT; i++)
-    {
-        if (playerStatus[playerIndex].shipsAvailable[i])
-            printf("%d. Ship of size %d\n", i + 1, shipSizes[i]);
-    }
+    if (playerStatus[playerIndex].shipsAvailable[0])
+        printf("1. CARRIER (Size: %d)\n", CARRIER);
+    if (playerStatus[playerIndex].shipsAvailable[1])
+        printf("2. BATTLESHIP (Size: %d)\n", BATTLESHIP);
+    if (playerStatus[playerIndex].shipsAvailable[2])
+        printf("3. DESTROYER (Size: %d)\n", DESTROYER);
+    if (playerStatus[playerIndex].shipsAvailable[3])
+        printf("4. SUBMARINE (Size: %d)\n", SUBMARINE);
 
     int choice;
     while (true)
@@ -249,58 +257,45 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
             printf("Invalid choice. Please select a valid ship number.\n");
             continue;
         }
-        switch (choice)
-        {
-        case 1:
-            if (playerStatus[playerIndex].shipsAvailable[0])
-            {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[0]);
-                playerStatus[playerIndex].shipsAvailable[0] = false;
-            }
-            else
-            {
-                printf("Ship of size %d is not available.\n", shipSizes[0]);
-            }
-            break;
-        case 2:
-            if (playerStatus[playerIndex].shipsAvailable[1])
-            {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[1]);
-                playerStatus[playerIndex].shipsAvailable[1] = false;
-            }
-            else
-            {
-                printf("Ship of size %d is not available.\n", shipSizes[1]);
-            }
-            break;
-        case 3:
-            if (playerStatus[playerIndex].shipsAvailable[2])
-            {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[2]);
-                playerStatus[playerIndex].shipsAvailable[2] = false;
-            }
-            else
-            {
-                printf("Ship of size %d is not available.\n", shipSizes[2]);
-            }
-            break;
-        case 4:
-            if (playerStatus[playerIndex].shipsAvailable[3])
-            {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, shipSizes[3]);
-                playerStatus[playerIndex].shipsAvailable[3] = false;
-            }
-            else
-            {
-                printf("Ship of size %d is not available.\n", shipSizes[3]);
-            }
-            break;
+        switch (choice) {
+            case 1:
+                if (playerStatus[playerIndex].shipsAvailable[0]) {
+                    placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, CARRIER);
+                    playerStatus[playerIndex].shipsAvailable[0] = false;
+                } else {
+                    printf("CARRIER is not available.\n");
+                }
+                break;
+            case 2:
+                if (playerStatus[playerIndex].shipsAvailable[1]) {
+                    placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, BATTLESHIP);
+                    playerStatus[playerIndex].shipsAvailable[1] = false;
+                } else {
+                    printf("BATTLESHIP is not available.\n");
+                }
+                break;
+            case 3:
+                if (playerStatus[playerIndex].shipsAvailable[2]) {
+                    placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, DESTROYER);
+                    playerStatus[playerIndex].shipsAvailable[2] = false;
+                } else {
+                    printf("DESTROYER is not available.\n");
+                }
+                break;
+            case 4:
+                if (playerStatus[playerIndex].shipsAvailable[3]) {
+                    placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, SUBMARINE);
+                    playerStatus[playerIndex].shipsAvailable[3] = false;
+                } else {
+                    printf("SUBMARINE is not available.\n");
+                }
+                break;
         }
         break;
     }
 }
 // Method to place the ships after checking the coordinates and the size of the ship
-void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size)
+void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size)
 {
     bool placed = false;
     while (!placed)
@@ -318,56 +313,51 @@ void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size)
         }
         y = toupper(coord[0]) - 'A';
         x = atoi(&coord[1]) - 1;
-        if (validateCoordinates(x, y))
+        validateCoordinates(x, y);
+        bool horizontal = (direction == 'H' || direction == 'h');
+        bool vertical = (direction == 'V' || direction == 'v');
+        if (horizontal)
         {
-            bool horizontal = (direction == 'H' || direction == 'h');
-            bool vertical = (direction == 'V' || direction == 'v');
-            if (horizontal)
+            if (y + size <= SIZE && checkPlacement(board, x, y, size, true))
             {
-                if (y + size <= SIZE && checkPlacement(board, x, y, size, true))
+                for (int j = 0; j < size; j++)
                 {
-                    for (int j = 0; j < size; j++)
-                    {
-                        board[x][y + j] = 'S'; // Place ship
-                        shipBoard[x][y + j] = size;
-                    }
-                    placed = true;
-                    puts("\nSHIP PLACED!");
-                    printBoard(board, false);
+                    board[x][y + j] = 'S'; // Place ship
+                    shipBoard[x][y + j] = size;
                 }
-                else
-                {
-                    printf("Invalid placement. Try again.\n");
-                    continue;
-                }
-            }
-            else if (vertical)
-            {
-                if (x + size <= SIZE && checkPlacement(board, x, y, size, false))
-                {
-                    for (int j = 0; j < size; j++)
-                    {
-                        board[x + j][y] = 'S'; // Place ship
-                        shipBoard[x + j][y] = size;
-                    }
-                    puts("SHIP PLACED!");
-                    printBoard(board, false);
-                    placed = true;
-                }
-                else
-                {
-                    printf("Invalid placement. Try again.\n");
-                    continue;
-                }
+                placed = true;
+                puts("\nSHIP PLACED!");
+                printBoard(board, false);
             }
             else
             {
-                puts("Invalid input. Try again.\n");
+                printf("Invalid placement. Try again.\n");
+                continue;
+            }
+        }
+        else if (vertical)
+        {
+            if (x + size <= SIZE && checkPlacement(board, x, y, size, false))
+            {
+                for (int j = 0; j < size; j++)
+                {
+                    board[x + j][y] = 'S'; // Place ship
+                    shipBoard[x + j][y] = size;
+                }
+                puts("SHIP PLACED!");
+                printBoard(board, false);
+                placed = true;
+            }
+            else
+            {
+                printf("Invalid placement. Try again.\n");
+                continue;
             }
         }
         else
         {
-            puts("Invalid coordinates. Try again.\n");
+            puts("Invalid input. Try again.\n");
+            // continue;
         }
     }
 }
@@ -389,12 +379,6 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
 
     if (playerStatus[playerIndex].canUseTorpedo)
         printf("%d. Torpedo\n", i++);
-    for (int i = 0; i < SHIP_COUNT; i++)
-    {
-        if (playerStatus[playerIndex].shipsAvailable[i])
-            printf("%d. Ship of size %d\n", i + 1, shipSizes[i]);
-    }
-
     int choice;
     while (true)
     {
@@ -479,7 +463,8 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
                 x = atoi(&coord[1]) - 1;
                 if (validateCoordinates(x, y))
                     // Artillery method here
-                    else puts("Invalid coordinates.\nYou lose your turn.");
+                else 
+                    puts("Invalid coordinates.\nYou lose your turn.");
             }
             else
                 puts("You can't use Artillery.\nYou lose your turn!");
