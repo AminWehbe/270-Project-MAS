@@ -21,6 +21,9 @@ typedef struct
     // Abilities
     int radarSweeps;
     int smokeScreens;
+    // Counter for how many smoke screens the player has used
+    int smokeCount;
+    bool obscuredCells[SIZE][SIZE];  // Hides cells when Smoke Screen applied
     // Indicators for using certain ability
     bool canUseArtillery;
     bool canUseTorpedo;
@@ -44,6 +47,8 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex);
 void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size);
 void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp);
 bool attack(char player1Board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode);
+bool radarSweep(PlayerStatus playerStatus[], int opponentIndex, int x, int y);
+bool smokeScreen(PlayerStatus playerStatus[], int playerIndex, int x, int y);
 void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode);
 void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input);
 bool checkWin(char opponentBoard[SIZE][SIZE]);
@@ -73,7 +78,7 @@ int main()
         playerStatus[i].radarSweeps = MAX_RADAR_SWEEPS;
         playerStatus[i].smokeScreens = 0;
         playerStatus[i].smokeCount = 0;
-        playerStatus[i].canUseArtillery = true; // Set both true for testing only, set false when one
+        playerStatus[i].canUseArtillery = true; // Set both true for testing only, set false when done
         playerStatus[i].canUseTorpedo = true;
         initializeBoard(playerStatus[i].board);
         initializeBoard(playerStatus[i].displayBoard);
@@ -81,6 +86,16 @@ int main()
         for (int j = 0; j < SHIP_COUNT; j++)
         {
             playerStatus[i].shipsAvailable[j] = true;
+        }
+    }
+    for (int i = 0; i < PLAYER_COUNT; i++)
+    {
+        for (int j = 0; j < SIZE; j++)
+        {
+            for (int k = 0; k < SIZE; k++)
+            {
+                playerStatus[i].obscuredCells[j][k] = false; // Set all cells to not obscured
+            }
         }
     }
     // Randomly getting player to start
@@ -423,7 +438,7 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
                 x = atoi(&coord[1]) - 1;
                 if (validateCoordinates(x, y))
                 {
-                    if (/* Radar sweep method to be added here, returns bool*/)
+                    if (radarSweep(playerStatus, opponent, x, y))
                         puts("Enemy ship(s) have been found!");
                     else
                         puts("No ships have been found");
@@ -524,6 +539,39 @@ bool attack(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x
     else
         printf("%c", opponentBoard[x][y]);
     return false;
+}
+// Method that reveals if there exists a ship in the 2x2 area scanned, returns true if ship(s) found
+bool radarSweep(PlayerStatus playerStatus[], int opponentIndex, int x, int y)
+{
+    for (int i = x; i <= x + 1; i++)
+    {
+        for (int j = y; j <= y + 1; j++)
+        {
+            if (playerStatus[opponentIndex].obscuredCells[i][j])
+            {
+                continue; // Count as a miss
+            }
+            // Check if a ship is found
+            if (playerStatus[opponentIndex].board[i][j] == 'S')
+            {
+                return true; // A ship is found
+            }
+        }
+    }
+    return false;
+}
+// Method to obscure the 2x2 area for the specified player
+bool smokeScreen(PlayerStatus playerStatus[], int playerIndex, int x, int y)
+{
+    for (int i = x; i <= x + 1; i++)
+    {
+        for (int j = y; j <= y + 1; j++)
+            playerStatus[playerIndex].obscuredCells[i][j] = true; // "Hide" 2x2 area
+    }
+    printf("Smoke screen applied.\n");
+    playerStatus[playerIndex].smokeScreens--;
+    playerStatus[playerIndex].smokeCount++;
+    return true;
 }
 // Method to hit 2x2 area
 void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode)
