@@ -4,41 +4,35 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-// do abilities, dont forget player struct update, main update..
+
 #define SIZE 10
-#define PLAYER_COUNT 2
 #define SHIP_COUNT 4
 #define MAX_RADAR_SWEEPS 3
 
 typedef struct
 {
-    // Boards
-    char board[SIZE][SIZE];        // Player's own board
-    int shipBoard[SIZE][SIZE];     // Copy of player's board, instead of (~) we have 0s, and instead of ships we have their size.
-    char displayBoard[SIZE][SIZE]; // View of opponent's board, depending on difficulty setting.
-    // Helps with placing ships
-    bool shipsAvailable[SHIP_COUNT];
-    // Counter for how many ships the player controlling has sunk
-    int shipsSunk;
+    int shipBoard[SIZE][SIZE];
+    char board[SIZE][SIZE];          // Player's own board
+    char displayBoard[SIZE][SIZE];   // Opponent's view
+    bool shipsAvailable[SHIP_COUNT]; // Helps with placing ships
+    bool obscuredCells[SIZE][SIZE];  // Hides cells when Smoke Screen applied
     // Abilities
     int radarSweeps;
     int smokeScreens;
+    // Counter for how many ships the player controlling has sunk
+    int shipsSunk;
     // Counter for how many smoke screens the player has used
     int smokeCount;
-    // Hides cells when Smoke Screen applied
-    bool obscuredCells[SIZE][SIZE];
     // Counter used in torpedo condition.
     int counter;
     // Counters used for artillery to work as indicated
     int shipOneCounter;
     int shipTwoCounter;
     int shipThreeCounter;
-    // Indicators for using certain ability
+    // Indicates if you can use certain ability
     bool canUseArtillery;
     bool canUseTorpedo;
-
 } PlayerStatus;
-
 enum ShipSize
 {
     CARRIER = 5,
@@ -46,23 +40,24 @@ enum ShipSize
     DESTROYER = 3,
     SUBMARINE = 2
 };
-bool isHard;
 
-void getPlayerNames(char names[PLAYER_COUNT][20]);
-void getDifficulity(char difficulity[]);
+// FUNCTION HEADERS
+void getPlayerName(char name[20]);
+int getDifficulity(char difficulity[]);
 void initializeBoard(char board[SIZE][SIZE]);
 void initializeShipBoard(int shipBoard[SIZE][SIZE]);
-void printBoard(char board[SIZE][SIZE], bool isHardMode);
-void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex);
+void printBoard(char board[SIZE][SIZE]);
+void displayAvailableShips(PlayerStatus playerStatus[], int player);
 void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size);
-void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp);
-bool attack(char player1Board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode);
-bool radarSweep(PlayerStatus playerStatus[], int opponentIndex, int x, int y);
-bool smokeScreen(PlayerStatus playerStatus[], int playerIndex, int x, int y);
-void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode);
+void displayAvailableMoves(PlayerStatus playerStatus[], int player, int bot);
+bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y);
+bool radarSweep(PlayerStatus playerStatus[], int bot, int x, int y);
+bool smokeScreen(PlayerStatus playerStatus[], int player, int x, int y);
+void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y);
 void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input);
-void checkSunkShips(PlayerStatus playerStatus[], int playerIndex, int opponentIndex);
+void checkSunkShips(PlayerStatus playerStatus[], int player, int bot);
 bool checkWin(char opponentBoard[SIZE][SIZE]);
+void printBot(int shipBoard[SIZE][SIZE]);
 
 // Helper/Secondary Methods
 void clearScreen();
@@ -71,20 +66,23 @@ void waitFor(unsigned int secs);
 bool validateCoordinates(int x, int y);
 bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal);
 void displayMoveCatalogue();
+// PHASE 2
+void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size);
 
 int main()
 {
     // Global initialization
     clearScreen();
     srand(time(NULL));
-    PlayerStatus playerStatus[PLAYER_COUNT];
-    char playerNames[PLAYER_COUNT][20];
+    PlayerStatus playerStatus[2];
+    char name[20];
     int randomNumber;
-    char hardMode[2];
-    getPlayerNames(playerNames);
-    getDifficulity(hardMode);
+    char difficulity[2];
+    getPlayerName(name);
+    int diff = getDifficulity(difficulity);
+    //PlayerStatus Bot;
     // PlayerStatus initialization phase
-    for (int i = 0; i < PLAYER_COUNT; i++)
+    for (int i = 0; i < 2; i++)
     {
         playerStatus[i].radarSweeps = MAX_RADAR_SWEEPS;
         playerStatus[i].smokeScreens = 0;
@@ -94,7 +92,7 @@ int main()
         playerStatus[i].shipTwoCounter = 0;
         playerStatus[i].shipThreeCounter = 0;
         playerStatus[i].shipsSunk = 0;
-        playerStatus[i].canUseArtillery = false; // Set both true for testing only, set false when done
+        playerStatus[i].canUseArtillery = false;
         playerStatus[i].canUseTorpedo = false;
         initializeBoard(playerStatus[i].board);
         initializeBoard(playerStatus[i].displayBoard);
@@ -108,134 +106,166 @@ int main()
             }
         }
     }
+    //initializeBoard(Bot.board);
+    //initializeBoard(Bot.displayBoard);
+    //initializeShipBoard(Bot.shipBoard);
+    
     // Randomly getting player to start
     puts("Let's see who goes first.");
     randomNumber = randomFirstPlayer();
-    waitFor(2);
-    printf("%s goes first!\n", playerNames[randomNumber]);
-    bool gameOver = false; // Bool that flips true when all ships are sunk on 1 player's board
-    int player1 = randomNumber;
-    int player2 = (player1 + 1) % PLAYER_COUNT;
-    waitFor(1);
-    puts("LAUNCHING GAME...");
     waitFor(3);
-
+    int player1 = randomNumber;
+    int bot = (player1 + 1) % 2;
     // Ship placing phase
-    for (int i = 0; i < PLAYER_COUNT; i++)
+    if (player1 == 0)
     {
+        printf("%s goes first!\n", name);
+        waitFor(2);
         clearScreen();
-        printf("%s, PLACE YOUR SHIPS:\n\n", playerNames[i]);
-        printBoard(playerStatus[i].board, isHard);
-        while (playerStatus[i].shipsAvailable[0] || playerStatus[i].shipsAvailable[1] || playerStatus[i].shipsAvailable[2] || playerStatus[i].shipsAvailable[3])
+        printf("%s, PLACE YOUR SHIPS:\n\n", name);
+        printBoard(playerStatus[player1].board);
+        while (playerStatus[player1].shipsAvailable[0] || playerStatus[player1].shipsAvailable[1] || playerStatus[player1].shipsAvailable[2] || playerStatus[player1].shipsAvailable[3])
         {
-            displayAvailableShips(playerStatus, i);
+            displayAvailableShips(playerStatus, player1);
         }
         waitFor(1);
         puts("NICE PLACEMENTS.\n");
-        if (i == 0)
+        waitFor(1);
+        puts("SWITCHING TURNS.");
+        waitFor(3);
+        clearScreen();
+        printf("Bot is placing ships...\n");
+        for (int i = 2; i < 6; i++)
         {
-            waitFor(1);
-            puts("SWITCHING TURNS.");
+            placeBotShip(playerStatus[bot].board, playerStatus[bot].shipBoard, i);
+        }
+        printf("Bot's placements:\n");
+        printBot(playerStatus[bot].shipBoard);
+    waitFor(10);
+        
+        waitFor(3);
+        printf("Bot placed his ships and is ready for war!!\n");
+    }
+    else
+    {
+        printf("Bot goes first.\n");
+        waitFor(2);
+        printf("Bot is placing ships...\n");
+        for (int i = 2; i < 6; i++)
+        {
+            placeBotShip(playerStatus[bot].board, playerStatus[bot].shipBoard, i);
         }
         waitFor(3);
-    }
-
-    // Title Screen
-    clearScreen();
-    puts("LET'S PLAY OCEAN WARFARE!\nMAY THE BEST SHIP CAPTAIN WIN!\n");
-    waitFor(1);
-    puts("GAME STARTING...");
-    waitFor(3);
-    clearScreen();
-    displayMoveCatalogue();
-    waitFor(8);
-
-    // Game loop
-    while (!gameOver)
-    {
-        clearScreen();
-        printf("%s's turn!\n\n", playerNames[player1]);
-        printf("This is your board %s.\n\n", playerNames[player1]);
-        printBoard(playerStatus[player1].board, isHard);
-
-        printf("This is the opponent's board (your view):\n");
-        printBoard(playerStatus[player1].displayBoard, isHard);
-
-        displayAvailableMoves(playerStatus, player1, player2);
-
-        if (playerStatus[player1].shipsSunk > 0)
-            printf("\nShips sunk so far:\n");
-        checkSunkShips(playerStatus, player2, player1);
-
-        if(checkWin(playerStatus[player2].board))
-            break;
-
-        // Switch players
-        player1 = player2;
-        player2 = (player1 + 1) % PLAYER_COUNT;
-        printf("\nSWITCHING TURNS.\n");
+        printf("Bot's placements:\n");
+       printBot(playerStatus[bot].shipBoard);
+    waitFor(10);
+        printf("Bot placed his ships and is ready for war!!\n");
+        waitFor(1);
+        puts("SWITCHING TURNS.");
         waitFor(3);
+        clearScreen();
+        printf("%s, PLACE YOUR SHIPS:\n\n", name);
+        printBoard(playerStatus[player1].board);
+        while (playerStatus[player1].shipsAvailable[0] || playerStatus[player1].shipsAvailable[1] || playerStatus[player1].shipsAvailable[2] || playerStatus[player1].shipsAvailable[3])
+        {
+            displayAvailableShips(playerStatus, player1);
+        }
+        waitFor(1);
+        puts("NICE PLACEMENTS.\n");
     }
+    puts("LAUNCHING GAME...");
+    printBoard(playerStatus[bot].board);
     waitFor(3);
-    clearScreen();
-    printf("GAME OVER!!\n");
-    waitFor(2);
-    printf("WE HAVE A WINNER:\n");
-    waitFor(3);
-    printf("%s WINS!\n", playerNames[player1]);
-    waitFor(1);
-    printf("Hard luck %s.", playerNames[player2]);
+
     return 0;
 }
 
 // Functions implementation
 
-void getPlayerNames(char names[PLAYER_COUNT][20])
+// Requires: char[]
+// Effects: fills name[] with player name
+void getPlayerName(char name[20])
 {
-    for (int i = 0; i < PLAYER_COUNT; i++)
-    {
-        printf("Enter name for player %d: ", i + 1);
-        scanf("%s", names[i]);
-    }
+    printf("Enter your name: ");
+    scanf("%s", name);
 }
-// Method to get difficulity. Hard doesn't show misses.
-void getDifficulity(char difficulity[])
+// Requires: char[]
+// Effects: returns int such as: 1: easy, 2: medium, 3: hard
+int getDifficulity(char difficulity[])
 {
     int c;
-    printf("Please enter a tracking difficulty level: E --D Easy, H --D Hard.\n");
+    printf("Please enter a tracking difficulty level: E --D Easy, M--D Medium, H --D Hard.\n");
     scanf("%s", difficulity);
-    while (strlen(difficulity) > 1 || difficulity[0] != 'E' && difficulity[0] != 'H' && difficulity[0] != 'e' && difficulity[0] != 'h')
+    while (strlen(difficulity) > 1 || difficulity[0] != 'E' && difficulity[0] != 'M' && difficulity[0] != 'H' && difficulity[0] != 'e' && difficulity[0] != 'm' && difficulity[0] != 'h')
     {
-        printf("The input you entered is invalid. Please enter: E --D Easy, H --D Hard.\n");
+        printf("The input you entered is invalid. Please enter: E --D Easy, M--D Medium, H --D Hard.\n");
         scanf("%s", difficulity);
     }
     switch (difficulity[0])
     {
     case 'E' | 'e':
         puts("You chose Easy Mode. Let's Play!");
-        isHard = false;
+        return 1;
+        break;
+    case 'M' | 'm':
+        puts("You chose Medium Mode. Let's Play!");
+        return 2;
         break;
     case 'H' | 'h':
         puts("You chose Hard Mode. Let's Play!");
-        isHard = true;
+        return 3;
         break;
     default:
         break;
     }
+    return 0;
 }
-// Initializes board with water (~)
+// Requires: char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size
+// Effects: The bot places its ships after checking the coordinates and the size of the ship
+void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size) {
+    bool placed = false;
+    while (!placed) {
+        int r = rand() % 2; 
+        int letter = rand() % SIZE; 
+        int number = rand() % SIZE; 
+        
+    
+        if (validateCoordinates(letter, number)) {
+            if (r == 0) { 
+                if (number + size <= SIZE && checkPlacement(board, letter, number, size, true)) {
+                    for (int j = 0; j < size; j++) {
+                        board[letter][number + j] = 'S'; 
+                        shipBoard[letter][number + j] = size; 
+                    }
+                    placed = true;
+                }
+            } else { 
+                if (letter + size <= SIZE && checkPlacement(board, letter, number, size, false)) {
+                    
+                    for (int j = 0; j < size; j++) {
+                        board[letter + j][number] = 'S'; 
+                        shipBoard[letter + j][number] = size; 
+                    }
+                    placed = true;
+                }
+            }
+        }
+    }
+}
+// Requires: char board[SIZE][SIZE]
+// Effects: Initializes board with water (~)
 void initializeBoard(char board[SIZE][SIZE])
 {
     for (int i = 0; i < SIZE; i++)
     {
-
         for (int j = 0; j < SIZE; j++)
         {
             board[i][j] = '~';
         }
     }
 }
-// Initializes shipboard with 0s.
+// Requires: int shipBoard[SIZE][SIZE]
+// Requires: Initializes shipboard with 0s
 void initializeShipBoard(int shipBoard[SIZE][SIZE])
 {
     for (int i = 0; i < SIZE; i++)
@@ -244,8 +274,9 @@ void initializeShipBoard(int shipBoard[SIZE][SIZE])
             shipBoard[i][j] = 0;
     }
 }
-// Prints the board
-void printBoard(char board[SIZE][SIZE], bool isHardMode)
+// Requires: char board[SIZE][SIZE]
+// Effects: Prints the board
+void printBoard(char board[SIZE][SIZE])
 {
     printf("   A B C D E F G H I J\n"); // Column headers
     for (int i = 0; i < SIZE; i++)
@@ -258,10 +289,10 @@ void printBoard(char board[SIZE][SIZE], bool isHardMode)
                 printf(" S"); // Show ship placement
             else if (cell == 'X')
                 printf(" *"); // Shows Hit
-            else if (cell == 'o' && !isHardMode)
+            else if (cell == 'o')
                 printf(" o"); // Shows Miss
-            else if (cell == 'o' && isHardMode)
-                printf(" ~"); // Hidden in Hard mode
+            // else if (cell == 'o')
+            // printf(" ~"); // Hidden in Hard mode
             else
                 printf(" ~"); // Water
         }
@@ -269,17 +300,18 @@ void printBoard(char board[SIZE][SIZE], bool isHardMode)
     }
     printf("\n");
 }
-// Method that displays to user whish ships can be placed with their sizes.
-void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
+// Requires: PlayerStatus playerStatus[], int player
+// Effects: displays to the player whish ships can be placed with their sizes
+void displayAvailableShips(PlayerStatus playerStatus[], int player)
 {
     printf("Available ships to place:\n");
-    if (playerStatus[playerIndex].shipsAvailable[0])
+    if (playerStatus[player].shipsAvailable[0])
         printf("1. CARRIER (Size: %d)\n", CARRIER);
-    if (playerStatus[playerIndex].shipsAvailable[1])
+    if (playerStatus[player].shipsAvailable[1])
         printf("2. BATTLESHIP (Size: %d)\n", BATTLESHIP);
-    if (playerStatus[playerIndex].shipsAvailable[2])
+    if (playerStatus[player].shipsAvailable[2])
         printf("3. DESTROYER (Size: %d)\n", DESTROYER);
-    if (playerStatus[playerIndex].shipsAvailable[3])
+    if (playerStatus[player].shipsAvailable[3])
         printf("4. SUBMARINE (Size: %d)\n", SUBMARINE);
 
     int choice;
@@ -303,10 +335,10 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
         switch (choice)
         {
         case 1:
-            if (playerStatus[playerIndex].shipsAvailable[0])
+            if (playerStatus[player].shipsAvailable[0])
             {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, CARRIER);
-                playerStatus[playerIndex].shipsAvailable[0] = false;
+                placeShip(playerStatus[player].board, playerStatus[player].shipBoard, CARRIER);
+                playerStatus[player].shipsAvailable[0] = false;
             }
             else
             {
@@ -314,10 +346,10 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
             }
             break;
         case 2:
-            if (playerStatus[playerIndex].shipsAvailable[1])
+            if (playerStatus[player].shipsAvailable[1])
             {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, BATTLESHIP);
-                playerStatus[playerIndex].shipsAvailable[1] = false;
+                placeShip(playerStatus[player].board, playerStatus[player].shipBoard, BATTLESHIP);
+                playerStatus[player].shipsAvailable[1] = false;
             }
             else
             {
@@ -325,10 +357,10 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
             }
             break;
         case 3:
-            if (playerStatus[playerIndex].shipsAvailable[2])
+            if (playerStatus[player].shipsAvailable[2])
             {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, DESTROYER);
-                playerStatus[playerIndex].shipsAvailable[2] = false;
+                placeShip(playerStatus[player].board, playerStatus[player].shipBoard, DESTROYER);
+                playerStatus[player].shipsAvailable[2] = false;
             }
             else
             {
@@ -336,10 +368,10 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
             }
             break;
         case 4:
-            if (playerStatus[playerIndex].shipsAvailable[3])
+            if (playerStatus[player].shipsAvailable[3])
             {
-                placeShip(playerStatus[playerIndex].board, playerStatus[playerIndex].shipBoard, SUBMARINE);
-                playerStatus[playerIndex].shipsAvailable[3] = false;
+                placeShip(playerStatus[player].board, playerStatus[player].shipBoard, SUBMARINE);
+                playerStatus[player].shipsAvailable[3] = false;
             }
             else
             {
@@ -350,7 +382,8 @@ void displayAvailableShips(PlayerStatus playerStatus[], int playerIndex)
         break;
     }
 }
-// Method to place the ships after checking the coordinates and the size of the ship
+// Requires: char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size
+// Effects: places the ships after checking the coordinates and the size of the ship
 void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size)
 {
     bool placed = false;
@@ -383,7 +416,7 @@ void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize 
                 }
                 placed = true;
                 puts("\nSHIP PLACED!");
-                printBoard(board, false);
+                printBoard(board);
             }
             else
             {
@@ -401,7 +434,7 @@ void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize 
                     shipBoard[x + j][y] = size;
                 }
                 puts("SHIP PLACED!");
-                printBoard(board, false);
+                printBoard(board);
                 placed = true;
             }
             else
@@ -417,23 +450,24 @@ void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize 
         }
     }
 }
-// Method that displays to the player his only available moves + calls the chosen method
-void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opponent)
+// Requires: PlayerStatus playerStatus[], int player, int bot
+// Effects: displays to the player his only available moves + calls the chosen method
+void displayAvailableMoves(PlayerStatus playerStatus[], int player, int bot)
 {
     int i = 1;
     printf("Available moves:\n");
     printf("%d. Fire\n", i++);
 
-    if (playerStatus[playerIndex].radarSweeps > 0)
-        printf("%d. Radar Sweep (Remaining: %d)\n", i++, playerStatus[playerIndex].radarSweeps);
+    if (playerStatus[player].radarSweeps > 0)
+        printf("%d. Radar Sweep (Remaining: %d)\n", i++, playerStatus[player].radarSweeps);
 
-    if (playerStatus[playerIndex].smokeScreens > 0)
-        printf("%d. Smoke Screen (Available: %d)\n", i++, playerStatus[playerIndex].smokeScreens);
+    if (playerStatus[player].smokeScreens > 0)
+        printf("%d. Smoke Screen (Available: %d)\n", i++, playerStatus[player].smokeScreens);
 
-    if (playerStatus[playerIndex].canUseArtillery)
+    if (playerStatus[player].canUseArtillery)
         printf("%d. Artillery\n", i++);
 
-    if (playerStatus[playerIndex].canUseTorpedo)
+    if (playerStatus[player].canUseTorpedo)
         printf("%d. Torpedo\n", i++);
     int choice;
     while (true)
@@ -462,12 +496,12 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
             y = toupper(coord[0]) - 'A';
             x = atoi(&coord[1]) - 1;
             if (validateCoordinates(x, y))
-                attack(playerStatus[opponent].board, playerStatus[playerIndex].displayBoard, x, y, isHard);
+                attack(playerStatus[bot].board, playerStatus[player].displayBoard, x, y);
             else
                 puts("Invalid coordinates.\nYou lose your turn.");
             break;
         case 2:
-            if (playerStatus[playerIndex].radarSweeps > 0)
+            if (playerStatus[player].radarSweeps > 0)
             {
                 puts("Enter coordinates for the Radar Sweep:\n");
                 char coord[3];
@@ -477,11 +511,11 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
                 x = atoi(&coord[1]) - 1;
                 if (validateCoordinates(x, y))
                 {
-                    if (radarSweep(playerStatus, opponent, x, y))
+                    if (radarSweep(playerStatus, bot, x, y))
                         puts("Enemy ship(s) have been found!");
                     else
                         puts("No ships have been found");
-                    playerStatus[playerIndex].radarSweeps--; // Decrement if used, no matter result
+                    playerStatus[player].radarSweeps--; // Decrement if used, no matter result
                 }
                 else
                     puts("Invalid coordinates.\nYou lose your turn.");
@@ -491,7 +525,7 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
 
             break;
         case 3:
-            if (playerStatus[playerIndex].smokeScreens > 0)
+            if (playerStatus[player].smokeScreens > 0)
             {
                 puts("Enter coordinates for cells you want to hide with Smoke Screen:\n");
                 char coord[3];
@@ -501,8 +535,8 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
                 x = atoi(&coord[1]) - 1;
                 if (validateCoordinates(x, y))
                 {
-                    smokeScreen(playerStatus, playerIndex, x, y);
-                    playerStatus[playerIndex].smokeScreens -= playerStatus[playerIndex].smokeCount; // decrement smokescreens with number of smokes used (smokecount)
+                    smokeScreen(playerStatus, player, x, y);
+                    playerStatus[player].smokeScreens -= playerStatus[player].smokeCount; // decrement smokescreens with number of smokes used (smokecount)
                 }
                 else
                     puts("Invalid coordinates.\nYou lose your turn.");
@@ -511,14 +545,14 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
                 puts("You don't possess any Smoke Screens.\nYou lose your turn!");
             break;
         case 4:
-            if (playerStatus[playerIndex].canUseArtillery)
+            if (playerStatus[player].canUseArtillery)
             {
                 puts("Enter coordinates for the Artillery Attack:\n");
                 scanf(" %s", coord);
                 y = toupper(coord[0]) - 'A';
                 x = atoi(&coord[1]) - 1;
                 if (validateCoordinates(x, y))
-                    artillery(playerStatus[opponent].board, playerStatus[playerIndex].displayBoard, x, y, isHard);
+                    artillery(playerStatus[bot].board, playerStatus[player].displayBoard, x, y);
                 else
                     puts("Invalid coordinates.\nYou lose your turn.");
             }
@@ -526,7 +560,7 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
                 puts("You can't use Artillery.\nYou lose your turn!");
             break;
         case 5:
-            if (playerStatus[playerIndex].canUseTorpedo)
+            if (playerStatus[player].canUseTorpedo)
             {
                 char input[3];
                 printf("Enter the row/column for the Torpedo Attack (1-10 or A-J): ");
@@ -534,11 +568,11 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
 
                 // Check if input is a valid number or letter
                 if (isdigit(input[0]) && strlen(input) == 1 && input[0] >= '1' && input[0] <= '9') // Valid single-digit number
-                    torpedo(playerStatus[opponent].board, playerStatus[playerIndex].displayBoard, input);
+                    torpedo(playerStatus[bot].board, playerStatus[player].displayBoard, input);
                 else if (isdigit(input[0]) && strlen(input) == 2 && input[0] == '1' && input[1] == '0')
-                    torpedo(playerStatus[opponent].board, playerStatus[playerIndex].displayBoard, input);
+                    torpedo(playerStatus[bot].board, playerStatus[player].displayBoard, input);
                 else if (isalpha(input[0]) && strlen(input) == 1 && toupper(input[0]) >= 'A' && toupper(input[0]) <= 'J') // Valid letter (A-J or a-j)
-                    torpedo(playerStatus[opponent].board, playerStatus[playerIndex].displayBoard, input);
+                    torpedo(playerStatus[bot].board, playerStatus[player].displayBoard, input);
                 else
                     printf("Invalid input. You lose your turn!\n");
             }
@@ -552,46 +586,48 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int playerIndex, int opp
         break;
     }
 }
-// Method that does the attack on a singular cell
-bool attack(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode)
+// Requires: char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y
+// Effects: attacks a cell
+bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y)
 {
-    if (opponentBoard[x][y] == 'S')
+    if (board[x][y] == 'S')
     {
-        opponentBoard[x][y] = 'X'; // Mark hit on the actual board
-        displayBoard[x][y] = 'X';  // Mark hit on the display board
+        board[x][y] = 'X';        // Mark hit on the actual board
+        displayBoard[x][y] = 'X'; // Mark hit on the display board
         printf("HIT ON %c%d!\n", 'A' + y, x + 1);
 
         return true; // Hit
     }
-    else if (opponentBoard[x][y] == '~')
+    else if (board[x][y] == '~')
     {
-        opponentBoard[x][y] = 'o'; // Mark miss on the actual board
-        displayBoard[x][y] = 'o';  // Mark miss on the display board
+        board[x][y] = 'o';        // Mark miss on the actual board
+        displayBoard[x][y] = 'o'; // Mark miss on the display board
         printf("Miss on %c%d.\n", 'A' + y, x + 1);
         return false; // Miss
     }
-    else if (opponentBoard[x][y] == 'X' || opponentBoard[x][y] == 'o') // Already attacked
+    else if (board[x][y] == 'X' || board[x][y] == 'o') // Already attacked
     {
         printf("%c%d was already attacked.\n", 'A' + y, x + 1);
         return false; // No action taken
     }
     else
-        printf("%c", opponentBoard[x][y]);
+        printf("%c", board[x][y]);
     return false;
 }
-// Method that reveals if there exists a ship in the 2x2 area scanned, returns true if ship(s) found
-bool radarSweep(PlayerStatus playerStatus[], int opponentIndex, int x, int y)
+// Requires: PlayerStatus playerStatus[], int bot, int x, int y
+// Effects: Returns true if there exists a ship in the 2x2 area scanned, false otherwise
+bool radarSweep(PlayerStatus playerStatus[], int bot, int x, int y)
 {
     for (int i = x; i <= x + 1; i++)
     {
         for (int j = y; j <= y + 1; j++)
         {
-            if (playerStatus[opponentIndex].obscuredCells[i][j])
+            if (playerStatus[bot].obscuredCells[i][j])
             {
                 continue; // Count as a miss
             }
             // Check if a ship is found
-            if (playerStatus[opponentIndex].board[i][j] == 'S')
+            if (playerStatus[bot].board[i][j] == 'S')
             {
                 return true; // A ship is found
             }
@@ -599,48 +635,52 @@ bool radarSweep(PlayerStatus playerStatus[], int opponentIndex, int x, int y)
     }
     return false;
 }
-// Method to obscure the 2x2 area for the specified player
-bool smokeScreen(PlayerStatus playerStatus[], int playerIndex, int x, int y)
+// Requires: PlayerStatus playerStatus[], int player, int x, int y
+// Effects: Obscures a 2x2 area
+bool smokeScreen(PlayerStatus playerStatus[], int player, int x, int y)
 {
     for (int i = x; i <= x + 1; i++)
     {
         for (int j = y; j <= y + 1; j++)
-            playerStatus[playerIndex].obscuredCells[i][j] = true; // "Hide" 2x2 area
+            playerStatus[player].obscuredCells[i][j] = true; // "Hide" 2x2 area
     }
     printf("Smoke screen applied.\n");
-    playerStatus[playerIndex].smokeScreens--;
-    playerStatus[playerIndex].smokeCount++;
+    playerStatus[player].smokeScreens--;
+    playerStatus[player].smokeCount++;
     return true;
 }
-// Method to hit 2x2 area
-void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y, bool isHardMode)
+// Requires: char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y
+// Effects: Calls attack method on a 2x2 area
+void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y)
 {
     for (int i = x; i <= x + 1; i++)
     {
         for (int j = y; j <= y + 1; j++)
         {
             if (i < SIZE && j < SIZE)
-                attack(opponentBoard, displayBoard, i, j, isHardMode);
+                attack(opponentBoard, displayBoard, i, j);
         }
     }
 }
-// Method to hit single row/column
+// Requires: char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input
+// Effects: Calls attack method on row/column
 void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input)
 {
+
     if (isdigit(input[0]) && strlen(input) == 1 && input[0] >= '1' && input[0] <= '9')
     {
         int row = atoi(input) - 1; // Convert the full string to an integer
         if (row >= 0 && row < SIZE)
         {
             for (int j = 0; j < SIZE; j++)
-                attack(opponentBoard, displayBoard, row, j, isHard);
+                attack(opponentBoard, displayBoard, row, j);
         }
     }
     else if (isdigit(input[0]) && strlen(input) == 2 && input[0] == '1' && input[1] == '0')
     {
         int row = atoi(input) - 1;
         for (int j = 0; j < SIZE; j++)
-            attack(opponentBoard, displayBoard, row, j, isHard);
+            attack(opponentBoard, displayBoard, row, j);
     }
     else if (isalpha(input[0]) && strlen(input) == 1) // Letters A-J only
     {
@@ -648,11 +688,13 @@ void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char
         if (col >= 0 && col < SIZE)
         {
             for (int i = 0; i < SIZE; i++)
-                attack(opponentBoard, displayBoard, i, col, isHard);
+                attack(opponentBoard, displayBoard, i, col);
         }
     }
 }
-void checkSunkShips(PlayerStatus playerStatus[], int playerIndex, int opponentIndex)
+// Requires: playerStatus[], int player, int bot
+// Effects: Checks and updates shipSunk counter + announces what ships have been sunk, refreshes certain abilities
+void checkSunkShips(PlayerStatus playerStatus[], int player, int bot)
 {
     int count = 0;
     enum ShipSize sizes[] = {CARRIER, BATTLESHIP, DESTROYER, SUBMARINE};
@@ -670,7 +712,7 @@ void checkSunkShips(PlayerStatus playerStatus[], int playerIndex, int opponentIn
                 // Check horizontally
                 for (int k = 0; k < size && y + k < SIZE; k++)
                 {
-                    if (playerStatus[playerIndex].shipBoard[x][y + k] == size && playerStatus[playerIndex].board[x][y + k] == 'X')
+                    if (playerStatus[player].shipBoard[x][y + k] == size && playerStatus[player].board[x][y + k] == 'X')
                         hCounter++;
                     else
                         break;
@@ -679,7 +721,7 @@ void checkSunkShips(PlayerStatus playerStatus[], int playerIndex, int opponentIn
                 // Check vertically
                 for (int k = 0; k < size && x + k < SIZE; k++)
                 {
-                    if (playerStatus[playerIndex].shipBoard[x + k][y] == size && playerStatus[playerIndex].board[x + k][y] == 'X')
+                    if (playerStatus[player].shipBoard[x + k][y] == size && playerStatus[player].board[x + k][y] == 'X')
                         vCounter++;
                     else
                         break;
@@ -694,59 +736,39 @@ void checkSunkShips(PlayerStatus playerStatus[], int playerIndex, int opponentIn
             }
         }
     }
-    playerStatus[opponentIndex].shipsSunk = count;
-    playerStatus[opponentIndex].smokeScreens = playerStatus[opponentIndex].shipsSunk - playerStatus[opponentIndex].smokeCount;
-    if (playerStatus[opponentIndex].shipsSunk == 3 && playerStatus[opponentIndex].counter < 1)
+    playerStatus[bot].shipsSunk = count;
+    playerStatus[bot].smokeScreens = playerStatus[bot].shipsSunk - playerStatus[bot].smokeCount;
+    if (playerStatus[bot].shipsSunk == 3 && playerStatus[bot].counter < 1)
     {
-        playerStatus[opponentIndex].counter = 1;
-        playerStatus[opponentIndex].canUseTorpedo = true;
+        playerStatus[bot].counter = 1;
+        playerStatus[bot].canUseTorpedo = true;
     }
     else
     {
-        playerStatus[opponentIndex].canUseTorpedo = false;
+        playerStatus[bot].canUseTorpedo = false;
     }
-    if (playerStatus[opponentIndex].shipsSunk == 1 && playerStatus[opponentIndex].shipOneCounter < 1)
+    if (playerStatus[bot].shipsSunk == 1 && playerStatus[bot].shipOneCounter < 1)
     {
-        playerStatus[opponentIndex].shipOneCounter = 1;
-        playerStatus[opponentIndex].canUseArtillery = true;
+        playerStatus[bot].shipOneCounter = 1;
+        playerStatus[bot].canUseArtillery = true;
     }
-    else if (playerStatus[opponentIndex].shipsSunk == 2 && playerStatus[opponentIndex].shipTwoCounter < 1)
+    else if (playerStatus[bot].shipsSunk == 2 && playerStatus[bot].shipTwoCounter < 1)
     {
-        playerStatus[opponentIndex].shipTwoCounter = 1;
-        playerStatus[opponentIndex].canUseArtillery = true;
+        playerStatus[bot].shipTwoCounter = 1;
+        playerStatus[bot].canUseArtillery = true;
     }
-    else if (playerStatus[opponentIndex].shipsSunk == 3 && playerStatus[opponentIndex].shipThreeCounter < 1)
+    else if (playerStatus[bot].shipsSunk == 3 && playerStatus[bot].shipThreeCounter < 1)
     {
-        playerStatus[opponentIndex].shipThreeCounter = 1;
-        playerStatus[opponentIndex].canUseArtillery = true;
+        playerStatus[bot].shipThreeCounter = 1;
+        playerStatus[bot].canUseArtillery = true;
     }
     else
     {
-        playerStatus[opponentIndex].canUseArtillery = false;
+        playerStatus[bot].canUseArtillery = false;
     }
 }
-// Method to randomly get and integer with the rand function and then get the remainder from the % operation(here %2 hence getting either 0 or 1 from any possible int)
-int randomFirstPlayer()
-{
-    return rand() % PLAYER_COUNT;
-}
-// Method to add suspense (ex: when gettin first player randomly). No practical use as much as something i wanted to do and got from "stackoverflow"
-void waitFor(unsigned int secs)
-{
-    unsigned int retTime = time(0) + secs; // Get finishing time.
-    while (time(0) < retTime)
-        ; // Loop until it arrives.
-}
-// To clear console screen depending on OS, also got from web
-void clearScreen()
-{
-#ifdef _WIN32
-    system("cls");
-#else
-    system("clear");
-#endif
-}
-// Method that checks if there is still a S, i.e. ship not sunk, to return false, otherwise true
+// Requires: opponentBoard[SIZE][SIZE]
+// Effects: Returns true if no ships have been detected on opponent board, false otherwise
 bool checkWin(char opponentBoard[SIZE][SIZE])
 {
     for (int i = 0; i < SIZE; i++)
@@ -759,7 +781,8 @@ bool checkWin(char opponentBoard[SIZE][SIZE])
     }
     return true;
 }
-// Method to check the placement in case of overlap. Returns true if overlap found, hence not allowing for ship placement
+// Requires: char board[SIZE][SIZE], int x, int y, int size, bool horizontal
+// Effects: Returns true if no overlap is detected, false otherwise
 bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal)
 {
     for (int j = 0; j < size; j++)
@@ -777,10 +800,32 @@ bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizon
     }
     return true; // Can place ship
 }
-// Method that checks for out-of-bounds in coordinates of form (x, y)
+// Requires: int x, y
+// Effects: Returns true if coordinates (x, y) are valid, false otherwise
 bool validateCoordinates(int x, int y)
 {
     return x >= 0 && x < SIZE && y >= 0 && y < SIZE;
+}
+// Method to randomly get and integer with the rand function and then get the remainder from the % operation(here %2 hence getting either 0 or 1 from any possible int)
+int randomFirstPlayer()
+{
+    return rand() % 2;
+}
+// Method to add suspense (ex: when gettin first player randomly). No practical use as much as something i wanted to do and got from "stackoverflow"
+void waitFor(unsigned int secs)
+{
+    unsigned int retTime = time(0) + secs; // Get finishing time.
+    while (time(0) < retTime)
+        ; // Loop until it arrives.
+}
+// To clear console screen depending on OS, also got from web
+void clearScreen()
+{
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
 }
 // Method that prints game instructions
 void displayMoveCatalogue()
@@ -791,4 +836,14 @@ void displayMoveCatalogue()
     printf("3. Smoke Screen: Obscures a 2x2 area of the grid by hiding it from radar sweeps.\n");
     printf("4. Artillery: An attack move that works similarly to Fire but targets a 2x2 area.\n");
     printf("5. Torpedo: A powerful attack that targets an entire row or column.\n");
+}
+
+void printBot(int shipBoard[SIZE][SIZE]){
+    for(int i = 0; i < SIZE; i++){
+        for(int j = 0; j < SIZE; j++){
+            printf("%d ", shipBoard[i][j]);
+        }
+        printf("\n");
+    }
+    
 }
