@@ -77,6 +77,7 @@ bool validateCoordinates(int x, int y);
 bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizontal);
 void displayMoveCatalogue();
 // PHASE 2
+void playBot(int diff, PlayerStatus playerStatus[], int player, int bot);
 void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size);
 void botEasy(PlayerStatus playerStatus[], int player, int bot);
 void botMedium(PlayerStatus playerStatus[], int player, int bot);
@@ -94,7 +95,7 @@ int main()
     char difficulity[2];
     getPlayerName(name);
     int diff = getDifficulity(difficulity);
-    // PlayerStatus Bot;
+    int win;
     //  PlayerStatus initialization phase
     for (int i = 0; i < 2; i++)
     {
@@ -172,7 +173,11 @@ int main()
             checkSunkShips(playerStatus, bot, player1);
 
             if (checkWin(playerStatus[bot].board))
+            {
+                win = 0;
                 break;
+            }
+
             waitFor(3);
             clearScreen();
             printf("SWITCHING TURNS.\n");
@@ -182,7 +187,7 @@ int main()
             waitFor(1);
             printf("Bot is thinking about it's move...\n");
             waitFor(2);
-            botMedium(playerStatus, player1, bot);
+            playBot(diff, playerStatus, player1, bot);
             waitFor(1);
             if (playerStatus[bot].shipsSunk > 0)
                 printf("\nBot has sunk so far:\n");
@@ -190,7 +195,11 @@ int main()
             waitFor(2);
             clearScreen();
             if (checkWin(playerStatus[player1].board))
+            {
+                win = 1;
                 break;
+            }
+
             printf("SWITCHING TURNS.\n");
             waitFor(2);
         }
@@ -229,14 +238,18 @@ int main()
             waitFor(1);
             printf("Bot is thinking about it's move...\n");
             waitFor(2);
-            botMedium(playerStatus, player1, bot);
+            playBot(diff, playerStatus, player1, bot);
             if (playerStatus[bot].shipsSunk > 0)
                 printf("\nBot has sunk so far:\n");
             checkSunkShips(playerStatus, player1, bot);
             waitFor(2);
             clearScreen();
             if (checkWin(playerStatus[player1].board))
+            {
+                win = 1;
                 break;
+            }
+
             printf("SWITCHING TURNS.\n");
             waitFor(2);
             clearScreen();
@@ -255,11 +268,23 @@ int main()
             checkSunkShips(playerStatus, bot, player1);
 
             if (checkWin(playerStatus[bot].board))
+            {
+                win = 0;
                 break;
+            }
             waitFor(3);
         }
     }
-    return 0;
+    clearScreen();
+    if (win == 0)
+        printf("%s, YOU WIN!\nTHAT WAS A GREAT GAME!\n", name);
+    
+    else
+        printf("You lose %s.\nThe Bot takes this one home.\n", name);
+    waitFor(8);
+    clearScreen();
+    printf("THIS WAS OCEAN WARFARE.\nDONE BY: AMINE WEHBE.\nSAID KANAAN.\nMOUNIR KAISSI.\nOMAR KHATIB.\n");
+        return 0;
 }
 
 // Functions implementation
@@ -931,7 +956,21 @@ void displayMoveCatalogue()
     printf("4. Artillery: An attack move that works similarly to Fire but targets a 2x2 area.\n");
     printf("5. Torpedo: A powerful attack that targets an entire row or column.\n");
 }
-
+// Method that chooses which bot to play depending on difficulty
+void playBot(int diff, PlayerStatus playerStatus[], int player, int bot)
+{
+    switch (diff)
+    {
+    case 1:
+        botEasy(playerStatus, player, bot);
+        break;
+    case 2:
+        botMedium(playerStatus, player, bot);
+        break;
+    default:
+        break;
+    }
+}
 void botEasy(PlayerStatus playerStatus[], int player, int bot)
 {
     while (true)
