@@ -41,6 +41,8 @@ enum ShipSize
     SUBMARINE = 2
 };
 
+int botBoard[SIZE][SIZE] = {0};
+
 // FUNCTION HEADERS
 void getPlayerName(char name[20]);
 int getDifficulity(char difficulity[]);
@@ -68,6 +70,8 @@ bool checkPlacement(char board[SIZE][SIZE], int x, int y, int size, bool horizon
 void displayMoveCatalogue();
 // PHASE 2
 void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size);
+void botEasy(PlayerStatus playerStatus[], int player, int bot);
+char *generate_random();
 
 int main()
 {
@@ -80,8 +84,8 @@ int main()
     char difficulity[2];
     getPlayerName(name);
     int diff = getDifficulity(difficulity);
-    //PlayerStatus Bot;
-    // PlayerStatus initialization phase
+    // PlayerStatus Bot;
+    //  PlayerStatus initialization phase
     for (int i = 0; i < 2; i++)
     {
         playerStatus[i].radarSweeps = MAX_RADAR_SWEEPS;
@@ -106,10 +110,6 @@ int main()
             }
         }
     }
-    //initializeBoard(Bot.board);
-    //initializeBoard(Bot.displayBoard);
-    //initializeShipBoard(Bot.shipBoard);
-    
     // Randomly getting player to start
     puts("Let's see who goes first.");
     randomNumber = randomFirstPlayer();
@@ -139,30 +139,63 @@ int main()
         {
             placeBotShip(playerStatus[bot].board, playerStatus[bot].shipBoard, i);
         }
-        printf("Bot's placements:\n");
-        printBot(playerStatus[bot].shipBoard);
-    waitFor(10);
-        
         waitFor(3);
         printf("Bot placed his ships and is ready for war!!\n");
+        waitFor(1);
+        puts("LAUNCHING GAME...");
+        waitFor(3);
+        while (true)
+        {
+            clearScreen();
+            printf("%s's turn!\n\n", name);
+            printf("This is your board %s.\n\n", name);
+            printBoard(playerStatus[player1].board);
+
+            printf("This is the opponent's board (your view):\n");
+            printBoard(playerStatus[player1].displayBoard);
+
+            displayAvailableMoves(playerStatus, player1, bot);
+
+            if (playerStatus[player1].shipsSunk > 0)
+                printf("\nShips sunk so far:\n");
+            checkSunkShips(playerStatus, bot, player1);
+
+            if (checkWin(playerStatus[bot].board))
+                break;
+            waitFor(3);
+            clearScreen();
+            printf("\nSWITCHING TURNS.\n");
+            waitFor(2);
+            clearScreen();
+            printf("Bots' turn.\n");
+            waitFor(1);
+            printf("Bot is thinking about it's move...\n");
+            waitFor(2);
+            botEasy(playerStatus, player1, bot);
+            checkSunkShips(playerStatus, player1, bot);
+            waitFor(2);
+            clearScreen();
+            if (checkWin(playerStatus[player1].board))
+                break;
+            printf("\nSWITCHING TURNS.\n");
+            waitFor(2);
+        }
     }
     else
     {
         printf("Bot goes first.\n");
         waitFor(2);
+        clearScreen();
         printf("Bot is placing ships...\n");
         for (int i = 2; i < 6; i++)
         {
             placeBotShip(playerStatus[bot].board, playerStatus[bot].shipBoard, i);
         }
-        waitFor(3);
-        printf("Bot's placements:\n");
-       printBot(playerStatus[bot].shipBoard);
-    waitFor(10);
+        waitFor(2);
         printf("Bot placed his ships and is ready for war!!\n");
         waitFor(1);
         puts("SWITCHING TURNS.");
-        waitFor(3);
+        waitFor(2);
         clearScreen();
         printf("%s, PLACE YOUR SHIPS:\n\n", name);
         printBoard(playerStatus[player1].board);
@@ -172,11 +205,43 @@ int main()
         }
         waitFor(1);
         puts("NICE PLACEMENTS.\n");
-    }
-    puts("LAUNCHING GAME...");
-    printBoard(playerStatus[bot].board);
-    waitFor(3);
+        waitFor(1);
+        puts("LAUNCHING GAME...");
+        waitFor(3);
+        while (true)
+        {
+            clearScreen();
+            printf("Bots' turn.\n");
+            waitFor(1);
+            printf("Bot is thinking about it's move...\n");
+            waitFor(2);
+            botEasy(playerStatus, player1, bot);
+            checkSunkShips(playerStatus, player1, bot);
+            waitFor(2);
+            clearScreen();
+            if (checkWin(playerStatus[player1].board))
+                break;
+            printf("SWITCHING TURNS.\n");
+            waitFor(2);
+            clearScreen();
+            printf("%s's turn!\n\n", name);
+            printf("This is your board %s.\n\n", name);
+            printBoard(playerStatus[player1].board);
 
+            printf("This is the opponent's board (your view):\n");
+            printBoard(playerStatus[player1].displayBoard);
+
+            displayAvailableMoves(playerStatus, player1, bot);
+
+            if (playerStatus[player1].shipsSunk > 0)
+                printf("\nShips sunk so far:\n");
+            checkSunkShips(playerStatus, bot, player1);
+
+            if (checkWin(playerStatus[bot].board))
+                break;
+            waitFor(2);
+        }
+    }
     return 0;
 }
 
@@ -222,29 +287,38 @@ int getDifficulity(char difficulity[])
 }
 // Requires: char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size
 // Effects: The bot places its ships after checking the coordinates and the size of the ship
-void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size) {
+void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size)
+{
     bool placed = false;
-    while (!placed) {
-        int r = rand() % 2; 
-        int letter = rand() % SIZE; 
-        int number = rand() % SIZE; 
-        
-    
-        if (validateCoordinates(letter, number)) {
-            if (r == 0) { 
-                if (number + size <= SIZE && checkPlacement(board, letter, number, size, true)) {
-                    for (int j = 0; j < size; j++) {
-                        board[letter][number + j] = 'S'; 
-                        shipBoard[letter][number + j] = size; 
+    while (!placed)
+    {
+        int r = rand() % 2;
+        int letter = rand() % SIZE;
+        int number = rand() % SIZE;
+
+        if (validateCoordinates(letter, number))
+        {
+            if (r == 0)
+            {
+                if (number + size <= SIZE && checkPlacement(board, letter, number, size, true))
+                {
+                    for (int j = 0; j < size; j++)
+                    {
+                        board[letter][number + j] = 'S';
+                        shipBoard[letter][number + j] = size;
                     }
                     placed = true;
                 }
-            } else { 
-                if (letter + size <= SIZE && checkPlacement(board, letter, number, size, false)) {
-                    
-                    for (int j = 0; j < size; j++) {
-                        board[letter + j][number] = 'S'; 
-                        shipBoard[letter + j][number] = size; 
+            }
+            else
+            {
+                if (letter + size <= SIZE && checkPlacement(board, letter, number, size, false))
+                {
+
+                    for (int j = 0; j < size; j++)
+                    {
+                        board[letter + j][number] = 'S';
+                        shipBoard[letter + j][number] = size;
                     }
                     placed = true;
                 }
@@ -595,7 +669,6 @@ bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y)
         board[x][y] = 'X';        // Mark hit on the actual board
         displayBoard[x][y] = 'X'; // Mark hit on the display board
         printf("HIT ON %c%d!\n", 'A' + y, x + 1);
-
         return true; // Hit
     }
     else if (board[x][y] == '~')
@@ -614,20 +687,20 @@ bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y)
         printf("%c", board[x][y]);
     return false;
 }
-// Requires: PlayerStatus playerStatus[], int bot, int x, int y
+// Requires: PlayerStatus playerStatus[], int opponent, int x, int y
 // Effects: Returns true if there exists a ship in the 2x2 area scanned, false otherwise
-bool radarSweep(PlayerStatus playerStatus[], int bot, int x, int y)
+bool radarSweep(PlayerStatus playerStatus[], int opponent, int x, int y)
 {
     for (int i = x; i <= x + 1; i++)
     {
         for (int j = y; j <= y + 1; j++)
         {
-            if (playerStatus[bot].obscuredCells[i][j])
+            if (playerStatus[opponent].obscuredCells[i][j])
             {
                 continue; // Count as a miss
             }
             // Check if a ship is found
-            if (playerStatus[bot].board[i][j] == 'S')
+            if (playerStatus[opponent].board[i][j] == 'S')
             {
                 return true; // A ship is found
             }
@@ -666,7 +739,6 @@ void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], in
 // Effects: Calls attack method on row/column
 void torpedo(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], char *input)
 {
-
     if (isdigit(input[0]) && strlen(input) == 1 && input[0] >= '1' && input[0] <= '9')
     {
         int row = atoi(input) - 1; // Convert the full string to an integer
@@ -838,12 +910,221 @@ void displayMoveCatalogue()
     printf("5. Torpedo: A powerful attack that targets an entire row or column.\n");
 }
 
-void printBot(int shipBoard[SIZE][SIZE]){
-    for(int i = 0; i < SIZE; i++){
-        for(int j = 0; j < SIZE; j++){
-            printf("%d ", shipBoard[i][j]);
+void botEasy(PlayerStatus playerStatus[], int player, int bot)
+{
+    while (true)
+    {
+        int x = rand() % SIZE;
+        int y = rand() % SIZE;
+        if (!validateCoordinates(x, y) && botBoard[x][y] == 1)
+            continue;
+        botBoard[x][y] = 1;
+
+        if (playerStatus[bot].radarSweeps <= 0 && playerStatus[bot].smokeScreens <= 0 && !playerStatus[bot].canUseArtillery && !playerStatus[bot].canUseTorpedo)
+        {
+            printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+            waitFor(1);
+            attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+            break;
         }
-        printf("\n");
+        else if (playerStatus[bot].smokeScreens <= 0 && !playerStatus[bot].canUseArtillery && !playerStatus[bot].canUseTorpedo)
+        {
+            int move = (rand() % 3) + 1;
+            switch (move)
+            {
+            case 1:
+                /*printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+                waitFor(1);
+                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;*/
+            case 2:
+                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+                waitFor(1);
+                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 3:
+                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
+                waitFor(1);
+                radarSweep(playerStatus, player, x, y);
+                break;
+            default:
+                break;
+            }
+            break;
+        }
+        else if (playerStatus[bot].smokeScreens <= 0 && playerStatus[bot].canUseArtillery == true && !playerStatus[bot].canUseTorpedo)
+        {
+            int move = (rand() % 3) + 1;
+            switch (move)
+            {
+            case 1:
+                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+                waitFor(1);
+                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 2:
+                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
+                waitFor(1);
+                radarSweep(playerStatus, player, x, y);
+                break;
+            case 3:
+                printf("BOT DEPLOYED ARTILLERY MISSILES. WATCH YOUR HEADS!\n");
+                waitFor(1);
+                artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            default:
+                break;
+            }
+            break;
+        }
+        else if (playerStatus[bot].smokeScreens <= 0 && !playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo == true)
+        {
+            int move = (rand() % 3) + 1;
+            switch (move)
+            {
+            case 1:
+                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+                waitFor(1);
+                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 2:
+                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
+                waitFor(1);
+                radarSweep(playerStatus, player, x, y);
+                break;
+            case 3:
+            {
+                char *s = generate_random();
+                printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!");
+                waitFor(1);
+                torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
+                break;
+            }
+            default:
+                break;
+            }
+            break;
+        }
+        else if (playerStatus[bot].canUseArtillery == true && !playerStatus[bot].canUseTorpedo)
+        {
+            int move = 1 + rand() % 4;
+            switch (move)
+            {
+            case 1:
+                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+                waitFor(1);
+                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 2:
+                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
+                waitFor(1);
+                radarSweep(playerStatus, player, x, y);
+                break;
+            case 3:
+                printf("BOT DEPLOYED ARTILLERY MISSILES. WATCH YOUR HEADS!\n");
+                waitFor(1);
+                artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 4:
+                printf("BOT IS ATTEMPTING TO SMOKE SCREEN HIS SHIPS\n");
+                waitFor(1);
+                smokeScreen(playerStatus, bot, x, y);
+                break;
+            default:
+                break;
+            }
+            break;
+        }
+        else if (!playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo == true)
+        {
+            int move = (rand() % 4) + 1;
+            switch (move)
+            {
+            case 1:
+                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+                waitFor(1);
+                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 2:
+                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
+                waitFor(1);
+                radarSweep(playerStatus, player, x, y);
+                break;
+            case 3:
+            {
+                char *s = generate_random();
+                printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!\n");
+                waitFor(1);
+                torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
+                break;
+            }
+            case 4:
+                printf("BOT IS ATTEMPTING TO SMOKE SCREEN HIS SHIP\n");
+                waitFor(1);
+                smokeScreen(playerStatus, bot, x, y);
+                break;
+            default:
+                break;
+            }
+            break;
+        }
+        else if(playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo)
+        {
+            int move = (rand() % 5) + 1;
+            switch (move)
+            {
+            case 1:
+                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+                waitFor(1);
+                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 2:
+                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
+                waitFor(1);
+                radarSweep(playerStatus, player, x, y);
+                break;
+            case 3:
+            {
+                char *s = generate_random();
+                printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!\n");
+                waitFor(1);
+                torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
+                break;
+            }
+            case 4:
+                printf("BOT DEPLOYED ARTILLERY MISSILES. WATCH YOUR HEADS!\n");
+                waitFor(1);
+                artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+                break;
+            case 5:
+                printf("BOT IS ATTEMPTING TO SMOKE SCREEN HIS SHIPS\n");
+                waitFor(1);
+                smokeScreen(playerStatus, bot, x, y);
+                break;
+            default:
+                break;
+            }
+            break;
+        }
     }
-    
+}
+char *generate_random()
+{
+    static char result[2]; // 1 character
+
+    int choice = rand() % 2; // Randomly choose between 0 (number) or 1 (letter)
+
+    if (choice == 0)
+    {
+        // Generate a random number between 0 and 9
+        result[0] = '0' + rand() % 10; // '0' + random number between 0 and 9
+    }
+    else
+    {
+        // Generate a random letter between 'a' and 'j'
+        result[0] = 'a' + rand() % 10; // 'a' + random number between 0 and 9
+    }
+
+    result[1] = '\0'; // Null-terminate the string
+    return result;    // Return the result as a C string
 }
