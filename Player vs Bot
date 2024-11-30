@@ -33,6 +33,14 @@ typedef struct
     bool canUseArtillery;
     bool canUseTorpedo;
 } PlayerStatus;
+
+typedef struct
+{
+    int lastHitX;       // Tracks last hit X coordinate
+    int lastHitY;       // Tracks last hit Y coordinate
+    bool targetingMode; // True if focusing on a specific ship, false initially
+} BotStatus;
+
 enum ShipSize
 {
     CARRIER = 5,
@@ -40,7 +48,7 @@ enum ShipSize
     DESTROYER = 3,
     SUBMARINE = 2
 };
-
+BotStatus botStatus = {-1, -1, false};
 int botBoard[SIZE][SIZE] = {0};
 
 // FUNCTION HEADERS
@@ -52,7 +60,7 @@ void printBoard(char board[SIZE][SIZE]);
 void displayAvailableShips(PlayerStatus playerStatus[], int player);
 void placeShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], enum ShipSize size);
 void displayAvailableMoves(PlayerStatus playerStatus[], int player, int bot);
-bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y);
+bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y); // Attack method is bool to keep track of hits and misses (useful in bot imp.)
 bool radarSweep(PlayerStatus playerStatus[], int bot, int x, int y);
 bool smokeScreen(PlayerStatus playerStatus[], int player, int x, int y);
 void artillery(char opponentBoard[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y);
@@ -71,7 +79,9 @@ void displayMoveCatalogue();
 // PHASE 2
 void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size);
 void botEasy(PlayerStatus playerStatus[], int player, int bot);
-char *generate_random();
+void botMedium(PlayerStatus playerStatus[], int player, int bot);
+char *randomTorpedo();
+char *randomTorpedoo(int lastHitX, int lastHitY);
 
 int main()
 {
@@ -148,6 +158,7 @@ int main()
         {
             clearScreen();
             printf("%s's turn!\n\n", name);
+            waitFor(1);
             printf("This is your board %s.\n\n", name);
             printBoard(playerStatus[player1].board);
 
@@ -164,20 +175,23 @@ int main()
                 break;
             waitFor(3);
             clearScreen();
-            printf("\nSWITCHING TURNS.\n");
+            printf("SWITCHING TURNS.\n");
             waitFor(2);
             clearScreen();
             printf("Bots' turn.\n");
             waitFor(1);
             printf("Bot is thinking about it's move...\n");
             waitFor(2);
-            botEasy(playerStatus, player1, bot);
+            botMedium(playerStatus, player1, bot);
+            waitFor(1);
+            if (playerStatus[bot].shipsSunk > 0)
+                printf("\nBot has sunk so far:\n");
             checkSunkShips(playerStatus, player1, bot);
             waitFor(2);
             clearScreen();
             if (checkWin(playerStatus[player1].board))
                 break;
-            printf("\nSWITCHING TURNS.\n");
+            printf("SWITCHING TURNS.\n");
             waitFor(2);
         }
     }
@@ -215,7 +229,9 @@ int main()
             waitFor(1);
             printf("Bot is thinking about it's move...\n");
             waitFor(2);
-            botEasy(playerStatus, player1, bot);
+            botMedium(playerStatus, player1, bot);
+            if (playerStatus[bot].shipsSunk > 0)
+                printf("\nBot has sunk so far:\n");
             checkSunkShips(playerStatus, player1, bot);
             waitFor(2);
             clearScreen();
@@ -225,6 +241,7 @@ int main()
             waitFor(2);
             clearScreen();
             printf("%s's turn!\n\n", name);
+            waitFor(1);
             printf("This is your board %s.\n\n", name);
             printBoard(playerStatus[player1].board);
 
@@ -239,7 +256,7 @@ int main()
 
             if (checkWin(playerStatus[bot].board))
                 break;
-            waitFor(2);
+            waitFor(3);
         }
     }
     return 0;
@@ -661,7 +678,7 @@ void displayAvailableMoves(PlayerStatus playerStatus[], int player, int bot)
     }
 }
 // Requires: char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y
-// Effects: attacks a cell
+// Effects: Returns true on hit, false otherwise
 bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y)
 {
     if (board[x][y] == 'S')
@@ -691,13 +708,18 @@ bool attack(char board[SIZE][SIZE], char displayBoard[SIZE][SIZE], int x, int y)
 // Effects: Returns true if there exists a ship in the 2x2 area scanned, false otherwise
 bool radarSweep(PlayerStatus playerStatus[], int opponent, int x, int y)
 {
-    for (int i = x; i <= x + 1; i++)
+    for (int i = x; i <= x + 1; i++) // Loop over the x-axis (2x2 area)
     {
-        for (int j = y; j <= y + 1; j++)
+        for (int j = y; j <= y + 1; j++) // Loop over the y-axis (2x2 area)
         {
+            // Check if i, j are within bounds of the board
+            if (!validateCoordinates(i, j))
+            {
+                continue; // Skip out-of-bounds cells
+            }
             if (playerStatus[opponent].obscuredCells[i][j])
             {
-                continue; // Count as a miss
+                continue; // If the cell is obscured by a smoke screen, treat as a miss
             }
             // Check if a ship is found
             if (playerStatus[opponent].board[i][j] == 'S')
@@ -933,10 +955,6 @@ void botEasy(PlayerStatus playerStatus[], int player, int bot)
             switch (move)
             {
             case 1:
-                /*printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
-                waitFor(1);
-                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;*/
             case 2:
                 printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
                 waitFor(1);
@@ -994,7 +1012,7 @@ void botEasy(PlayerStatus playerStatus[], int player, int bot)
                 break;
             case 3:
             {
-                char *s = generate_random();
+                char *s = randomTorpedo();
                 printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!");
                 waitFor(1);
                 torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
@@ -1052,7 +1070,7 @@ void botEasy(PlayerStatus playerStatus[], int player, int bot)
                 break;
             case 3:
             {
-                char *s = generate_random();
+                char *s = randomTorpedo();
                 printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!\n");
                 waitFor(1);
                 torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
@@ -1068,7 +1086,7 @@ void botEasy(PlayerStatus playerStatus[], int player, int bot)
             }
             break;
         }
-        else if(playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo)
+        else if (playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo)
         {
             int move = (rand() % 5) + 1;
             switch (move)
@@ -1085,7 +1103,7 @@ void botEasy(PlayerStatus playerStatus[], int player, int bot)
                 break;
             case 3:
             {
-                char *s = generate_random();
+                char *s = randomTorpedo();
                 printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!\n");
                 waitFor(1);
                 torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
@@ -1108,7 +1126,210 @@ void botEasy(PlayerStatus playerStatus[], int player, int bot)
         }
     }
 }
-char *generate_random()
+void botMedium(PlayerStatus playerStatus[], int player, int bot)
+{
+    // Prioritize Torpedo and Artillery (80% chance when available)
+    if (playerStatus[bot].canUseTorpedo && rand() % 100 < 80)
+    {
+        // If targeting mode is active (after a hit), prioritize adjacent row/column for torpedo
+        char *s;
+        if (botStatus.targetingMode)
+        {
+            // Target the same row or column as the previous hit
+            s = randomTorpedoo(botStatus.lastHitX, botStatus.lastHitY);
+        }
+        else
+        {
+            // Otherwise, select a random row/column
+            s = randomTorpedo();
+        }
+
+        printf("BOT UNLEASHED A TORPEDO ATTACK ON %s! BE CAREFUL!\n", s);
+        waitFor(1);
+        torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
+        return;
+    }
+
+    if (playerStatus[bot].canUseArtillery && rand() % 100 < 80)
+    {
+        // If targeting mode is active, artillery should target adjacent cells
+        int x, y;
+        if (botStatus.targetingMode)
+        {
+            // Target adjacent cells for artillery (2x2 area)
+            int dx[] = {-1, 1, 0, 0}; // Directions: up, down, left, right
+            int dy[] = {0, 0, -1, 1};
+
+            // Randomly choose an adjacent direction
+            int direction = rand() % 4;
+            x = botStatus.lastHitX + dx[direction];
+            y = botStatus.lastHitY + dy[direction];
+
+            // Ensure we stay within bounds
+            if (!validateCoordinates(x, y))
+            {
+                x = botStatus.lastHitX;
+                y = botStatus.lastHitY;
+            }
+        }
+        else
+        {
+            // If not targeting, use random coordinates
+            x = rand() % SIZE;
+            y = rand() % SIZE;
+        }
+
+        printf("BOT DEPLOYED ARTILLERY MISSILES AT %c%d. WATCH OUT!\n", 'A' + y, x + 1);
+        waitFor(1);
+        artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
+        return;
+    }
+
+    // Radar Sweep and Smoke Screen (20% chance when available)
+    if (playerStatus[bot].radarSweeps > 0 && rand() % 100 < 20)
+    {
+        int x, y;
+        do
+        {
+            x = rand() % SIZE;
+            y = rand() % SIZE;
+        } while (botBoard[x][y] != 0);
+        printf("BOT IS USING RADAR SWEEP AT %c%d.\n", 'A' + y, x + 1);
+        waitFor(1);
+        if (radarSweep(playerStatus, player, x, y))
+        {
+            printf("BOT FOUND A SHIP NEARBY USING RADAR SWEEP!\n");
+            botStatus.lastHitX = x;
+            botStatus.lastHitY = y;
+            botStatus.targetingMode = true;
+            return; // Focus on this area first
+        }
+        else
+            printf("BOT'S RADAR SWEEP FOUND NOTHING.\n");
+        playerStatus[bot].radarSweeps--;
+        return;
+    }
+
+    if (playerStatus[bot].smokeScreens > 0 && rand() % 100 < 30)
+    {
+        // Check for areas with multiple ships and apply smoke screen there
+        bool usedSmokeScreen = false;
+
+        for (int x = 0; x < SIZE - 1; x++)
+        {
+            for (int y = 0; y < SIZE - 1; y++)
+            {
+                // Check if the 2x2 area has multiple ships
+                int shipCount = 0;
+                for (int dx = 0; dx < 2; dx++)
+                {
+                    for (int dy = 0; dy < 2; dy++)
+                    {
+                        if (playerStatus[bot].board[x + dx][y + dy] == 'S')
+                        {
+                            shipCount++;
+                        }
+                    }
+                }
+
+                // If there are 2 or more ships in the 2x2 area, apply the smoke screen
+                if (shipCount >= 2)
+                {
+                    printf("BOT IS USING SMOKE SCREEN TO OBSCURE SOME AREA.\n");
+                    waitFor(1);
+                    smokeScreen(playerStatus, bot, x, y);
+                    usedSmokeScreen = true;
+                    break;
+                }
+            }
+            if (usedSmokeScreen)
+                break;
+        }
+
+        // If no high density ship area is found, just use smoke screen randomly
+        if (!usedSmokeScreen)
+        {
+            int x = rand() % SIZE;
+            int y = rand() % SIZE;
+            printf("BOT IS USING SMOKE SCREEN TO OBSCURE SOME AREA.\n");
+            waitFor(1);
+            smokeScreen(playerStatus, bot, x, y);
+        }
+        return;
+    }
+
+    // If no abilities used, go into Targeting Mode
+    // Targeting Mode: Prioritize adjacent cells if already found hit, hit randomly (like ez bot) otherwise
+    if (botStatus.targetingMode)
+    {
+        int dx[] = {-1, 1, 0, 0}; // Directions: up, down, left, right
+        int dy[] = {0, 0, -1, 1};
+
+        for (int i = 0; i < 4; i++)
+        {
+            int x = botStatus.lastHitX + dx[i];
+            int y = botStatus.lastHitY + dy[i];
+
+            // Check if the cell is valid and unvisited
+            if (validateCoordinates(x, y) && botBoard[x][y] == 0)
+            {
+                botBoard[x][y] = 1; // Mark cell as "visited"
+                printf("BOT FIRED AT %c%d. TAKE COVER!\n", 'A' + y, x + 1);
+                waitFor(1);
+                if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y)) // If hit, continue targeting
+                {
+                    botStatus.lastHitX = x;
+                    botStatus.lastHitY = y;
+                    return;
+                }
+                else // If miss reset targeting mode
+                {
+                    botStatus.targetingMode = false;
+                    return;
+                }
+            }
+        }
+    }
+    // If no abilities are used AND targeting mode fails, randomly attack to find hit
+    while (true)
+    {
+        int x = rand() % SIZE;
+        int y = rand() % SIZE;
+
+        if (botBoard[x][y] == 0) // Unattacked cell
+        {
+            botBoard[x][y] = 1;                                                           // Mark cell as visited
+            if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y)) // If hit, prepare for Targeting Mode next turn
+            {
+                botStatus.lastHitX = x;
+                botStatus.lastHitY = y;
+                botStatus.targetingMode = true;
+            }
+            return;
+        }
+    }
+}
+// Same as below, but one that takes last hit in consideration
+char *randomTorpedoo(int lastHitX, int lastHitY)
+{
+    static char result[2]; // The result will be either a letter (column) or a number (row)
+
+    // Randomly choose whether to return a column or a row
+    if (rand() % 2 == 0)
+    {
+        // Generate a column (A-J)
+        result[0] = 'A' + rand() % 10;
+    }
+    else
+    {
+        // Generate a row (1-10)
+        result[0] = '1' + rand() % 10;
+    }
+    result[1] = '\0'; // Null-terminate the string to make it a proper string
+    return result;
+}
+// Helper method for Torpedo method for generating either random row/column
+char *randomTorpedo()
 {
     static char result[2]; // 1 character
 
@@ -1116,15 +1337,14 @@ char *generate_random()
 
     if (choice == 0)
     {
-        // Generate a random number between 0 and 9
-        result[0] = '0' + rand() % 10; // '0' + random number between 0 and 9
+        // Generate a random number (1-10)
+        result[0] = '0' + rand() % SIZE;
     }
     else
     {
-        // Generate a random letter between 'a' and 'j'
-        result[0] = 'a' + rand() % 10; // 'a' + random number between 0 and 9
+        // Generate a random letter (A-J)
+        result[0] = 'a' + rand() % SIZE;
     }
-
     result[1] = '\0'; // Null-terminate the string
-    return result;    // Return the result as a C string
+    return result;
 }
