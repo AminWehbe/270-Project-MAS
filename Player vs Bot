@@ -976,8 +976,8 @@ void playBot(int diff, PlayerStatus playerStatus[], int player, int bot)
 }
 void botEasy(PlayerStatus playerStatus[], int player, int bot)
 {
-    // Check if the bot is in a targeting state from previous hits
-    if (botStatus.targetingMode)
+    // Check if the bot is in a targeting state from previous hits, 50% chance to enter targeting mode since ez
+    if (botStatus.targetingMode && rand() % 100 < 50)
     {
         // Try to target adjacent cells with a lower priority
         int dx[] = {-1, 1, 0, 0}; // Directions: up, down, left, right
@@ -1295,7 +1295,6 @@ void botHard(PlayerStatus playerStatus[], int player, int bot)
                 }
                 else
                 {
-                    waitFor(2); // Pause after move
                     // Exit targeting mode if miss
                     botStatus.targetingMode = false;
                     return;
@@ -1304,32 +1303,32 @@ void botHard(PlayerStatus playerStatus[], int player, int bot)
             else // else hit similair to medium bot
             {
                 int dx[] = {-1, 1, 0, 0}; // Directions: up, down, left, right
-        int dy[] = {0, 0, -1, 1};
+                int dy[] = {0, 0, -1, 1};
 
-        for (int i = 0; i < 4; i++)
-        {
-            int x = botStatus.lastHitX + dx[i];
-            int y = botStatus.lastHitY + dy[i];
+                for (int i = 0; i < 4; i++)
+                {
+                    int x = botStatus.lastHitX + dx[i];
+                    int y = botStatus.lastHitY + dy[i];
 
-            // Check if the cell is valid and unvisited
-            if (validateCoordinates(x, y) && botBoard[x][y] == 0)
-            {
-                botBoard[x][y] = 1; // Mark cell as "visited"
-                printf("BOT FIRED AT %c%d. TAKE COVER!\n", 'A' + y, x + 1);
-                waitFor(1);
-                if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y)) // If hit, continue targeting
-                {
-                    botStatus.lastHitX = x;
-                    botStatus.lastHitY = y;
-                    return;
+                    // Check if the cell is valid and unvisited
+                    if (validateCoordinates(x, y) && botBoard[x][y] == 0)
+                    {
+                        botBoard[x][y] = 1; // Mark cell as "visited"
+                        printf("BOT FIRED AT %c%d. TAKE COVER!\n", 'A' + y, x + 1);
+                        waitFor(1);
+                        if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y)) // If hit, continue targeting
+                        {
+                            botStatus.lastHitX = x;
+                            botStatus.lastHitY = y;
+                            return;
+                        }
+                        else // If miss reset targeting mode
+                        {
+                            botStatus.targetingMode = false;
+                            return;
+                        }
+                    }
                 }
-                else // If miss reset targeting mode
-                {
-                    botStatus.targetingMode = false;
-                    return;
-                }
-            }
-        }
             }
         }
         // If no valid adjacent cells contain ships, exit targeting mode
@@ -1381,7 +1380,7 @@ void botHard(PlayerStatus playerStatus[], int player, int bot)
     }
 
     // Smoke Screen usage to hide critical areas
-     if (playerStatus[bot].smokeScreens > 0 && rand() % 100 < 30 && !botStatus.targetingMode)
+    if (playerStatus[bot].smokeScreens > 0 && rand() % 100 < 30 && !botStatus.targetingMode)
     {
         // Check for areas with multiple ships and apply smoke screen there
         bool usedSmokeScreen = false;
