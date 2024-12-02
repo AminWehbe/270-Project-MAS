@@ -81,6 +81,7 @@ void playBot(int diff, PlayerStatus playerStatus[], int player, int bot);
 void placeBotShip(char board[SIZE][SIZE], int shipBoard[SIZE][SIZE], int size);
 void botEasy(PlayerStatus playerStatus[], int player, int bot);
 void botMedium(PlayerStatus playerStatus[], int player, int bot);
+void botHard(PlayerStatus playerStatus[], int player, int bot);
 char *randomTorpedo();
 char *randomTorpedoo(int lastHitX, int lastHitY);
 
@@ -278,13 +279,13 @@ int main()
     clearScreen();
     if (win == 0)
         printf("%s, YOU WIN!\nTHAT WAS A GREAT GAME!\n", name);
-    
+
     else
         printf("You lose %s.\nThe Bot takes this one home.\n", name);
     waitFor(8);
     clearScreen();
     printf("THIS WAS OCEAN WARFARE.\nDONE BY: AMINE WEHBE.\nSAID KANAAN.\nMOUNIR KAISSI.\nOMAR KHATIB.\n");
-        return 0;
+    return 0;
 }
 
 // Functions implementation
@@ -967,201 +968,116 @@ void playBot(int diff, PlayerStatus playerStatus[], int player, int bot)
     case 2:
         botMedium(playerStatus, player, bot);
         break;
+    case 3:
+        botHard(playerStatus, player, bot);
     default:
         break;
     }
 }
 void botEasy(PlayerStatus playerStatus[], int player, int bot)
 {
-    while (true)
+    // Check if the bot is in a targeting state from previous hits
+    if (botStatus.targetingMode)
     {
-        int x = rand() % SIZE;
-        int y = rand() % SIZE;
-        if (!validateCoordinates(x, y) && botBoard[x][y] == 1)
-            continue;
-        botBoard[x][y] = 1;
+        // Try to target adjacent cells with a lower priority
+        int dx[] = {-1, 1, 0, 0}; // Directions: up, down, left, right
+        int dy[] = {0, 0, -1, 1};
 
-        if (playerStatus[bot].radarSweeps <= 0 && playerStatus[bot].smokeScreens <= 0 && !playerStatus[bot].canUseArtillery && !playerStatus[bot].canUseTorpedo)
+        for (int i = 0; i < 4; i++)
         {
-            printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
+            int x = botStatus.lastHitX + dx[i];
+            int y = botStatus.lastHitY + dy[i];
+
+            // Check if the cell is valid, unvisited, and not previously attacked
+            if (validateCoordinates(x, y) && botBoard[x][y] == 0)
+            {
+                botBoard[x][y] = 1; // Mark cell as "visited"
+                printf("BOT FIRED AT %c%d. TAKE COVER!\n", 'A' + y, x + 1);
+                waitFor(1);
+                if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y))
+                {
+                    botStatus.lastHitX = x;
+                    botStatus.lastHitY = y;
+                    return;
+                }
+                else // If miss, stop targeting
+                {
+                    botStatus.targetingMode = false;
+                    return;
+                }
+            }
+        }
+    }
+
+    // If no hits or targeting mode, proceed with random actions
+    else
+    {
+        // Decide on a move: Randomly attack, use radar sweep, or deploy abilities
+        int move = rand() % 3;
+
+        // Check if the bot has any abilities available
+        if (playerStatus[bot].radarSweeps > 0 && move == 0) // Radar sweep if available
+        {
+            int x = rand() % SIZE;
+            int y = rand() % SIZE;
+            printf("BOT IS USING RADAR SWEEP AT %c%d.\n", 'A' + y, x + 1);
+            waitFor(1);
+            if (radarSweep(playerStatus, player, x, y))
+            {
+                printf("BOT FOUND A SHIP USING RADAR SWEEP!\n");
+                botStatus.targetingMode = true;
+                botStatus.lastHitX = x;
+                botStatus.lastHitY = y;
+                return; // Focus on the new target
+            }
+            else
+            {
+                printf("BOT'S RADAR SWEEP FOUND NOTHING.\n");
+                playerStatus[bot].radarSweeps--; // Decrease radar sweeps
+            }
+        }
+        else if (playerStatus[bot].smokeScreens > 0 && move == 1) // Smoke screen if available
+        {
+            int x = rand() % SIZE;
+            int y = rand() % SIZE;
+            printf("BOT IS USING SMOKE SCREEN TO OBSCURE AREA.\n");
+            waitFor(1);
+            smokeScreen(playerStatus, bot, x, y);
+            playerStatus[bot].smokeScreens--; // Decrease smoke screens
+        }
+        else // Normal attack (or fallback)
+        {
+            int x, y;
+            do
+            {
+                x = rand() % SIZE;
+                y = rand() % SIZE;
+            } while (botBoard[x][y] == 1); // Ensure the bot doesn't attack a previously attacked cell
+
+            botBoard[x][y] = 1; // Mark the cell as "visited"
+            printf("BOT FIRED AT %c%d. TAKE COVER!\n", 'A' + y, x + 1);
             waitFor(1);
             attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-            break;
         }
-        else if (playerStatus[bot].smokeScreens <= 0 && !playerStatus[bot].canUseArtillery && !playerStatus[bot].canUseTorpedo)
+    }
+
+    // Randomly decide if the bot should deploy a torpedo or artillery
+    if (rand() % 100 < 50) // 50% chance to use torpedo or artillery
+    {
+        if (playerStatus[bot].canUseTorpedo)
         {
-            int move = (rand() % 3) + 1;
-            switch (move)
-            {
-            case 1:
-            case 2:
-                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
-                waitFor(1);
-                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 3:
-                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
-                waitFor(1);
-                radarSweep(playerStatus, player, x, y);
-                break;
-            default:
-                break;
-            }
-            break;
+            char *s = randomTorpedo();
+            printf("BOT UNLEASHED A TORPEDO ATTACK ON %s! BE CAREFUL!\n", s);
+            waitFor(1);
+            torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
         }
-        else if (playerStatus[bot].smokeScreens <= 0 && playerStatus[bot].canUseArtillery == true && !playerStatus[bot].canUseTorpedo)
+        else if (playerStatus[bot].canUseArtillery)
         {
-            int move = (rand() % 3) + 1;
-            switch (move)
-            {
-            case 1:
-                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
-                waitFor(1);
-                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 2:
-                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
-                waitFor(1);
-                radarSweep(playerStatus, player, x, y);
-                break;
-            case 3:
-                printf("BOT DEPLOYED ARTILLERY MISSILES. WATCH YOUR HEADS!\n");
-                waitFor(1);
-                artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            default:
-                break;
-            }
-            break;
-        }
-        else if (playerStatus[bot].smokeScreens <= 0 && !playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo == true)
-        {
-            int move = (rand() % 3) + 1;
-            switch (move)
-            {
-            case 1:
-                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
-                waitFor(1);
-                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 2:
-                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
-                waitFor(1);
-                radarSweep(playerStatus, player, x, y);
-                break;
-            case 3:
-            {
-                char *s = randomTorpedo();
-                printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!");
-                waitFor(1);
-                torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
-                break;
-            }
-            default:
-                break;
-            }
-            break;
-        }
-        else if (playerStatus[bot].canUseArtillery == true && !playerStatus[bot].canUseTorpedo)
-        {
-            int move = 1 + rand() % 4;
-            switch (move)
-            {
-            case 1:
-                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
-                waitFor(1);
-                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 2:
-                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
-                waitFor(1);
-                radarSweep(playerStatus, player, x, y);
-                break;
-            case 3:
-                printf("BOT DEPLOYED ARTILLERY MISSILES. WATCH YOUR HEADS!\n");
-                waitFor(1);
-                artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 4:
-                printf("BOT IS ATTEMPTING TO SMOKE SCREEN HIS SHIPS\n");
-                waitFor(1);
-                smokeScreen(playerStatus, bot, x, y);
-                break;
-            default:
-                break;
-            }
-            break;
-        }
-        else if (!playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo == true)
-        {
-            int move = (rand() % 4) + 1;
-            switch (move)
-            {
-            case 1:
-                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
-                waitFor(1);
-                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 2:
-                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
-                waitFor(1);
-                radarSweep(playerStatus, player, x, y);
-                break;
-            case 3:
-            {
-                char *s = randomTorpedo();
-                printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!\n");
-                waitFor(1);
-                torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
-                break;
-            }
-            case 4:
-                printf("BOT IS ATTEMPTING TO SMOKE SCREEN HIS SHIP\n");
-                waitFor(1);
-                smokeScreen(playerStatus, bot, x, y);
-                break;
-            default:
-                break;
-            }
-            break;
-        }
-        else if (playerStatus[bot].canUseArtillery && playerStatus[bot].canUseTorpedo)
-        {
-            int move = (rand() % 5) + 1;
-            switch (move)
-            {
-            case 1:
-                printf("BOT FIRED AT YOUR SHIPS. TAKE COVER!\n");
-                waitFor(1);
-                attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 2:
-                printf("BEWARE! BOT IS RADAR SWEEPING NEAR YOUR SHIPS.\n");
-                waitFor(1);
-                radarSweep(playerStatus, player, x, y);
-                break;
-            case 3:
-            {
-                char *s = randomTorpedo();
-                printf("BOT UNLEASHED DEADLY TORPEDO ATTACK! ALERT RED!!\n");
-                waitFor(1);
-                torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
-                break;
-            }
-            case 4:
-                printf("BOT DEPLOYED ARTILLERY MISSILES. WATCH YOUR HEADS!\n");
-                waitFor(1);
-                artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
-                break;
-            case 5:
-                printf("BOT IS ATTEMPTING TO SMOKE SCREEN HIS SHIPS\n");
-                waitFor(1);
-                smokeScreen(playerStatus, bot, x, y);
-                break;
-            default:
-                break;
-            }
-            break;
+            int x = rand() % SIZE;
+            int y = rand() % SIZE;
+            printf("BOT DEPLOYED ARTILLERY MISSILES AT %c%d. WATCH OUT!\n", 'A' + y, x + 1);
+            waitFor(1);
+            artillery(playerStatus[player].board, playerStatus[bot].displayBoard, x, y);
         }
     }
 }
@@ -1249,7 +1165,7 @@ void botMedium(PlayerStatus playerStatus[], int player, int bot)
         return;
     }
 
-    if (playerStatus[bot].smokeScreens > 0 && rand() % 100 < 30)
+    if (playerStatus[bot].smokeScreens > 0 && rand() % 100 < 30 && !botStatus.targetingMode)
     {
         // Check for areas with multiple ships and apply smoke screen there
         bool usedSmokeScreen = false;
@@ -1335,14 +1251,221 @@ void botMedium(PlayerStatus playerStatus[], int player, int bot)
         int x = rand() % SIZE;
         int y = rand() % SIZE;
 
-        if (botBoard[x][y] == 0) // Unattacked cell
+        if (botBoard[x][y] == 0) // Unvisited cell
         {
-            botBoard[x][y] = 1;                                                           // Mark cell as visited
+            botBoard[x][y] = 1; // Mark cell as visited
+            printf("BOT FIRED AT %c%d. BE ALERT!\n", 'A' + y, x + 1);
             if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y)) // If hit, prepare for Targeting Mode next turn
             {
                 botStatus.lastHitX = x;
                 botStatus.lastHitY = y;
                 botStatus.targetingMode = true;
+            }
+            return;
+        }
+    }
+}
+void botHard(PlayerStatus playerStatus[], int player, int bot)
+{
+    static int lastHitX = -1;
+    static int lastHitY = -1;
+
+    int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // Up, Down, Left, Right
+    int nextX, nextY;
+
+    // Targeting mode: Attack only adjacent cells with ships
+    if (botStatus.targetingMode)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            nextX = lastHitX + directions[i][0];
+            nextY = lastHitY + directions[i][1];
+
+            // Check if the adjacent cell is valid and contains a ship
+            if (validateCoordinates(nextX, nextY) && playerStatus[player].board[nextX][nextY] == 'S' && playerStatus[bot].displayBoard[nextX][nextY] == '~' && rand() % 100 < 50)
+            { // Ensure it's not already attacked
+                printf("BOT TARGETS SHIP AT %c%d.\n", 'A' + nextY, nextX + 1);
+                if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, nextX, nextY))
+                {
+                    waitFor(2); // Pause after move
+                    // Continue targeting mode if hit
+                    lastHitX = nextX;
+                    lastHitY = nextY;
+                    return;
+                }
+                else
+                {
+                    waitFor(2); // Pause after move
+                    // Exit targeting mode if miss
+                    botStatus.targetingMode = false;
+                    return;
+                }
+            }
+            else // else hit similair to medium bot
+            {
+                int dx[] = {-1, 1, 0, 0}; // Directions: up, down, left, right
+        int dy[] = {0, 0, -1, 1};
+
+        for (int i = 0; i < 4; i++)
+        {
+            int x = botStatus.lastHitX + dx[i];
+            int y = botStatus.lastHitY + dy[i];
+
+            // Check if the cell is valid and unvisited
+            if (validateCoordinates(x, y) && botBoard[x][y] == 0)
+            {
+                botBoard[x][y] = 1; // Mark cell as "visited"
+                printf("BOT FIRED AT %c%d. TAKE COVER!\n", 'A' + y, x + 1);
+                waitFor(1);
+                if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y)) // If hit, continue targeting
+                {
+                    botStatus.lastHitX = x;
+                    botStatus.lastHitY = y;
+                    return;
+                }
+                else // If miss reset targeting mode
+                {
+                    botStatus.targetingMode = false;
+                    return;
+                }
+            }
+        }
+            }
+        }
+        // If no valid adjacent cells contain ships, exit targeting mode
+        botStatus.targetingMode = false;
+    }
+    // Prioritize Torpedo if available (100% chance)
+    if (playerStatus[bot].canUseTorpedo)
+    {
+        char *s = botStatus.targetingMode ? randomTorpedoo(lastHitX, lastHitY) : randomTorpedo();
+        printf("BOT UNLEASHES TORPEDO ATTACK ON %s!\n", s);
+        torpedo(playerStatus[player].board, playerStatus[bot].displayBoard, s);
+        waitFor(2); // Pause after move
+        return;
+    }
+
+    // Prioritize Artillery if available
+    if (playerStatus[bot].canUseArtillery)
+    {
+        int artilleryX = botStatus.targetingMode ? lastHitX : rand() % SIZE;
+        int artilleryY = botStatus.targetingMode ? lastHitY : rand() % SIZE;
+        printf("BOT DEPLOYS ARTILLERY AT %c%d!\n", 'A' + artilleryY, artilleryX + 1);
+        artillery(playerStatus[player].board, playerStatus[bot].displayBoard, artilleryX, artilleryY);
+        waitFor(2); // Pause after move
+        return;
+    }
+    // Use Radar Sweep (20% chance when available)
+    if (playerStatus[bot].radarSweeps > 0 && rand() % 100 < 20)
+    {
+        int x, y;
+        do
+        {
+            x = rand() % SIZE;
+            y = rand() % SIZE;
+        } while (botBoard[x][y] != 0);
+        printf("BOT IS USING RADAR SWEEP AT %c%d.\n", 'A' + y, x + 1);
+        waitFor(1);
+        if (radarSweep(playerStatus, player, x, y))
+        {
+            printf("BOT FOUND A SHIP NEARBY USING RADAR SWEEP!\n");
+            botStatus.lastHitX = x;
+            botStatus.lastHitY = y;
+            botStatus.targetingMode = true;
+            return; // Focus on this area first
+        }
+        else
+            printf("BOT'S RADAR SWEEP FOUND NOTHING.\n");
+        playerStatus[bot].radarSweeps--;
+        return;
+    }
+
+    // Smoke Screen usage to hide critical areas
+     if (playerStatus[bot].smokeScreens > 0 && rand() % 100 < 30 && !botStatus.targetingMode)
+    {
+        // Check for areas with multiple ships and apply smoke screen there
+        bool usedSmokeScreen = false;
+
+        for (int x = 0; x < SIZE - 1; x++)
+        {
+            for (int y = 0; y < SIZE - 1; y++)
+            {
+                // Check if the 2x2 area has multiple ships
+                int shipCount = 0;
+                for (int dx = 0; dx < 2; dx++)
+                {
+                    for (int dy = 0; dy < 2; dy++)
+                    {
+                        if (playerStatus[bot].board[x + dx][y + dy] == 'S')
+                        {
+                            shipCount++;
+                        }
+                    }
+                }
+
+                // If there are 2 or more ships in the 2x2 area, apply the smoke screen
+                if (shipCount >= 2)
+                {
+                    printf("BOT IS USING SMOKE SCREEN TO OBSCURE SOME AREA.\n");
+                    waitFor(1);
+                    smokeScreen(playerStatus, bot, x, y);
+                    usedSmokeScreen = true;
+                    break;
+                }
+            }
+            if (usedSmokeScreen)
+                break;
+        }
+
+        // If no high density ship area is found, just use smoke screen randomly
+        if (!usedSmokeScreen)
+        {
+            int x = rand() % SIZE;
+            int y = rand() % SIZE;
+            printf("BOT IS USING SMOKE SCREEN TO OBSCURE SOME AREA.\n");
+            waitFor(1);
+            smokeScreen(playerStatus, bot, x, y);
+        }
+        return;
+    }
+
+    // Random targeting with 25% probability of hitting a ship
+    while (true)
+    {
+        int x = rand() % SIZE;
+        int y = rand() % SIZE;
+        int o = rand() % 100;
+
+        if (validateCoordinates(x, y) && playerStatus[bot].displayBoard[x][y] == '~')
+        {
+            if (o < 35)
+            { // 35% chance to hit or an actual ship
+                for (int j = 0; j < SIZE; j++)
+                {
+                    for (int k = 0; k < SIZE; k++)
+                    {
+                        if (playerStatus[player].board[j][k] == 'S')
+                        {
+                            lastHitX = j;
+                            lastHitY = k;
+                            attack(playerStatus[player].board, playerStatus[bot].displayBoard, j, k);
+                            printf("BOT FIRES AT %c%d.\n", 'A' + y, x + 1);
+                            botStatus.targetingMode = true;
+                            return;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (attack(playerStatus[player].board, playerStatus[bot].displayBoard, x, y))
+                {
+                    botStatus.lastHitX = x;
+                    botStatus.lastHitY = y;
+                    botStatus.targetingMode = true;
+                }
+                else
+                    botStatus.targetingMode = false;
             }
             return;
         }
